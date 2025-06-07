@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "getopt.h": "c",
+        "ctype.h": "c",
+        "nas.h": "c"
+    }
+}
