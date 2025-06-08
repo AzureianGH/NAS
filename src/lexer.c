@@ -50,9 +50,12 @@ register_t parse_register(const char *str)
     if (strcasecmp(str, "ds") == 0)
         return REG_DS;
     if (strcasecmp(str, "es") == 0)
-        return REG_ES;
-    if (strcasecmp(str, "ss") == 0)
+        return REG_ES;    if (strcasecmp(str, "ss") == 0)
         return REG_SS;
+    if (strcasecmp(str, "fs") == 0)
+        return REG_FS;
+    if (strcasecmp(str, "gs") == 0)
+        return REG_GS;
     // 32-bit registers
     if (strcasecmp(str, "eax") == 0)
         return REG_EAX;
@@ -87,6 +90,23 @@ register_t parse_register(const char *str)
         return REG_DL;
     if (strcasecmp(str, "dh") == 0)
         return REG_DH;
+    // Control registers
+    if (strcasecmp(str, "cr0") == 0)
+        return REG_CR0;
+    if (strcasecmp(str, "cr1") == 0)
+        return REG_CR1;
+    if (strcasecmp(str, "cr2") == 0)
+        return REG_CR2;
+    if (strcasecmp(str, "cr3") == 0)
+        return REG_CR3;
+    if (strcasecmp(str, "cr4") == 0)
+        return REG_CR4;
+    if (strcasecmp(str, "cr5") == 0)
+        return REG_CR5;
+    if (strcasecmp(str, "cr6") == 0)
+        return REG_CR6;
+    if (strcasecmp(str, "cr7") == 0)
+        return REG_CR7;
     return REG_NONE;
 }
 
@@ -115,9 +135,12 @@ const char *register_to_string(register_t reg)
     case REG_DS:
         return "ds";
     case REG_ES:
-        return "es";
-    case REG_SS:
+        return "es";    case REG_SS:
         return "ss";
+    case REG_FS:
+        return "fs";
+    case REG_GS:
+        return "gs";
     // 32-bit registers
     case REG_EAX:
         return "eax";
@@ -152,6 +175,23 @@ const char *register_to_string(register_t reg)
         return "dl";
     case REG_DH:
         return "dh";
+    // Control registers
+    case REG_CR0:
+        return "cr0";
+    case REG_CR1:
+        return "cr1";
+    case REG_CR2:
+        return "cr2";
+    case REG_CR3:
+        return "cr3";
+    case REG_CR4:
+        return "cr4";
+    case REG_CR5:
+        return "cr5";
+    case REG_CR6:
+        return "cr6";
+    case REG_CR7:
+        return "cr7";
     default:
         return "none";
     }
@@ -247,14 +287,14 @@ static token_t lexer_read_string(lexer_t *lexer)
     token.column = lexer->column;
 
     size_t start = lexer->position;
-    
+
     // Handle dot-prefixed identifiers like .text, .data, .bss
     if (lexer->position < lexer->length && lexer->input[lexer->position] == '.')
     {
         lexer->position++;
         lexer->column++;
     }
-    
+
     while (lexer->position < lexer->length && is_alnum(lexer->input[lexer->position]))
     {
         lexer->position++;
@@ -314,7 +354,7 @@ static token_t lexer_read_string(lexer_t *lexer)
             "clc", "stc", "cmc", "cld", "std", "cli", "sti",
             "lahf", "sahf", "pushf", "popf",
             // Stack operations
-            "pusha", "popa",            // System instructions
+            "pusha", "popa", // System instructions
             "int", "int3", "into", "iret", "hlt", "wait", "lock", "nop", "lgdt",
             // BCD operations
             "daa", "das", "aaa", "aas", "aam", "aad",
@@ -403,7 +443,8 @@ static token_t lexer_read_character(lexer_t *lexer)
             lexer->position++;
             lexer->column++;
         }
-    }    return token;
+    }
+    return token;
 }
 
 static token_t lexer_read_string_literal(lexer_t *lexer)
@@ -419,31 +460,45 @@ static token_t lexer_read_string_literal(lexer_t *lexer)
     size_t start = lexer->position;
     size_t value_idx = 0;
 
-    while (lexer->position < lexer->length && 
-           lexer->input[lexer->position] != '"' && 
+    while (lexer->position < lexer->length &&
+           lexer->input[lexer->position] != '"' &&
            value_idx < MAX_OPERAND_LENGTH - 1)
     {
         char c = lexer->input[lexer->position];
-        
+
         // Handle escape sequences
         if (c == '\\' && lexer->position + 1 < lexer->length)
         {
             lexer->position++; // Skip backslash
             lexer->column++;
-            
+
             char next = lexer->input[lexer->position];
             switch (next)
             {
-                case 'n': c = '\n'; break;
-                case 'r': c = '\r'; break;
-                case 't': c = '\t'; break;
-                case '\\': c = '\\'; break;
-                case '"': c = '"'; break;
-                case '0': c = '\0'; break;
-                default: c = next; break; // For any other character, use as-is
+            case 'n':
+                c = '\n';
+                break;
+            case 'r':
+                c = '\r';
+                break;
+            case 't':
+                c = '\t';
+                break;
+            case '\\':
+                c = '\\';
+                break;
+            case '"':
+                c = '"';
+                break;
+            case '0':
+                c = '\0';
+                break;
+            default:
+                c = next;
+                break; // For any other character, use as-is
             }
         }
-        
+
         token.value[value_idx++] = c;
         lexer->position++;
         lexer->column++;
@@ -616,8 +671,10 @@ token_t lexer_next_token(lexer_t *lexer)
         strncpy(token.value, &lexer->input[start], length);
         token.value[length] = '\0';
         lexer->column += length;
-        break;    case '\'':
-        return lexer_read_character(lexer);    case '"':
+        break;
+    case '\'':
+        return lexer_read_character(lexer);
+    case '"':
         return lexer_read_string_literal(lexer);
 
     case '.':

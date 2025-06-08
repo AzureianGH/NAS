@@ -378,8 +378,7 @@ uint8_t register_to_modrm(register_t reg)
     case REG_BH:
     case REG_DI:
     case REG_EDI:
-        return 7;
-    // Segment registers
+        return 7;    // Segment registers
     case REG_ES:
         return 0;
     case REG_CS:
@@ -388,6 +387,27 @@ uint8_t register_to_modrm(register_t reg)
         return 2;
     case REG_DS:
         return 3;
+    case REG_FS:
+        return 4;
+    case REG_GS:
+        return 5;
+    // Control registers
+    case REG_CR0:
+        return 0;
+    case REG_CR1:
+        return 1;
+    case REG_CR2:
+        return 2;
+    case REG_CR3:
+        return 3;
+    case REG_CR4:
+        return 4;
+    case REG_CR5:
+        return 5;
+    case REG_CR6:
+        return 6;
+    case REG_CR7:
+        return 7;
     default:
         return 0;
     }
@@ -413,20 +433,30 @@ int get_register_size(register_t reg)
     case REG_SI:
     case REG_DI:
     case REG_BP:
-    case REG_SP:
-    case REG_CS:
+    case REG_SP:    case REG_CS:
     case REG_DS:
     case REG_ES:
     case REG_SS:
+    case REG_FS:
+    case REG_GS:
         return 16;
     case REG_EAX:
     case REG_EBX:
     case REG_ECX:
     case REG_EDX:
     case REG_ESI:
-    case REG_EDI:
-    case REG_EBP:
+    case REG_EDI:    case REG_EBP:
     case REG_ESP:
+        return 32;
+    // Control registers (32-bit)
+    case REG_CR0:
+    case REG_CR1:
+    case REG_CR2:
+    case REG_CR3:
+    case REG_CR4:
+    case REG_CR5:
+    case REG_CR6:
+    case REG_CR7:
         return 32;
     default:
         return 0;
@@ -503,7 +533,12 @@ static bool encode_pop_reg(const instruction_t *instr, uint8_t *buffer, size_t *
 
 static bool is_segment_register(register_t reg)
 {
-    return (reg == REG_ES || reg == REG_CS || reg == REG_SS || reg == REG_DS);
+    return (reg == REG_ES || reg == REG_CS || reg == REG_SS || reg == REG_DS || reg == REG_FS || reg == REG_GS);
+}
+
+static bool is_control_register(register_t reg)
+{
+    return (reg >= REG_CR0 && reg <= REG_CR7);
 }
 
 static bool encode_mov_reg_reg(const instruction_t *instr, uint8_t *buffer, size_t *size)
@@ -529,13 +564,31 @@ static bool encode_mov_reg_reg(const instruction_t *instr, uint8_t *buffer, size
         buffer[1] = make_modrm(3, dst_code, src_code);
         *size = 2;
         return true;
-    }
-    else if (!is_segment_register(dst) && is_segment_register(src))
+    }    else if (!is_segment_register(dst) && is_segment_register(src))
     {
         // MOV r/m16, Sreg (move from segment register)
         buffer[0] = 0x8C;
         buffer[1] = make_modrm(3, src_code, dst_code);
         *size = 2;
+        return true;
+    }
+    // Handle control register moves
+    else if (is_control_register(dst) && !is_control_register(src) && !is_segment_register(src))
+    {
+        // MOV CRn, r32 (move to control register) - requires 0x0F 0x22 prefix
+        buffer[0] = 0x0F;
+        buffer[1] = 0x22;
+        buffer[2] = make_modrm(3, dst_code, src_code);
+        *size = 3;
+        return true;
+    }
+    else if (!is_control_register(dst) && !is_segment_register(dst) && is_control_register(src))
+    {
+        // MOV r32, CRn (move from control register) - requires 0x0F 0x20 prefix
+        buffer[0] = 0x0F;
+        buffer[1] = 0x20;
+        buffer[2] = make_modrm(3, src_code, dst_code);
+        *size = 3;
         return true;
     }
 
@@ -2126,6 +2179,10 @@ static uint8_t get_segment_override_prefix(register_t segment)
         return 0x36;
     case REG_DS:
         return 0x3E;
+    case REG_FS:
+        return 0x64;
+    case REG_GS:
+        return 0x65;
     default:
         return 0x00; // No prefix
     }
@@ -2178,13 +2235,27 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
     }
     // Use a temporary buffer for the main instruction, then copy to final buffer with prefix
     uint8_t temp_buffer[16];
-    size_t temp_size = 0;
-
-    // Handle far pointer calls and jumps: jmp seg:off, call seg:off
+    size_t temp_size = 0;    // Handle far pointer calls and jumps: jmp seg:off, call seg:off
     if (instr->operand_count == 1 && instr->operands[0].type == OPERAND_FARPTR)
     {
         uint16_t offset = instr->operands[0].value.far_ptr.offset;
         uint16_t segment = instr->operands[0].value.far_ptr.segment;
+        
+        // If offset is a label, resolve it
+        if (instr->operands[0].value.far_ptr.has_label_offset)
+        {
+            symbol_t *sym = symbol_lookup(asm_ctx, instr->operands[0].value.far_ptr.offset_label);
+            if (sym && sym->defined)
+            {
+                offset = (uint16_t)sym->address;
+            }
+            else
+            {
+                // Label not defined, set offset to 0 (will be resolved in later pass)
+                offset = 0;
+            }
+        }
+        
         if (strcasecmp(instr->mnemonic, "jmp") == 0)
         {
             temp_buffer[0] = 0xEA; // FAR JMP ptr16:16

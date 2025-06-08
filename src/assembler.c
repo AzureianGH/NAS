@@ -7,13 +7,12 @@ assembler_t *assembler_create(void)
     if (!asm_ctx)
         return NULL;
 
-    memset(asm_ctx, 0, sizeof(assembler_t));
-
-    // Default settings
+    memset(asm_ctx, 0, sizeof(assembler_t));    // Default settings
     asm_ctx->mode = MODE_16BIT;
     asm_ctx->cmdline_mode = MODE_16BIT;
     asm_ctx->cmdline_mode_set = false;
     asm_ctx->directive_mode_set = false;
+    asm_ctx->bit_change_allowed = false;
     asm_ctx->format = FORMAT_BIN;
     asm_ctx->origin = 0x0000; // Default origin address
     asm_ctx->current_address = asm_ctx->origin;
@@ -105,19 +104,43 @@ void symbol_table_dump(assembler_t *asm_ctx)
     if (!asm_ctx->verbose)
         return;
 
-    printf("DEBUG: Symbol table contents:\n");
+    // ANSI color codes
+    const char *header_color = "\033[1;36m";    // Bright cyan
+    const char *defined_color = "\033[1;32m";   // Bright green
+    const char *undefined_color = "\033[1;31m"; // Bright red
+    const char *name_color = "\033[1;33m";      // Bright yellow
+    const char *address_color = "\033[1;35m";   // Bright magenta
+    const char *reset_color = "\033[0m";        // Reset
+
+    printf("%s╔════════════════════════════════════════════════════════════════╗%s\n", header_color, reset_color);
+    printf("%s║                        SYMBOL TABLE                           ║%s\n", header_color, reset_color);
+    printf("%s╠════╤═══════════════════════╤═══════════╤═══════════════════════╣%s\n", header_color, reset_color);
+    printf("%s║ #  │ Symbol Name           │ Address   │ Status                ║%s\n", header_color, reset_color);
+    printf("%s╠════╪═══════════════════════╪═══════════╪═══════════════════════╣%s\n", header_color, reset_color);
+
     symbol_t *current = asm_ctx->symbols;
     int count = 0;
     while (current)
     {
-        printf("  %d: '%s' -> 0x%04X (defined=%s)\n",
-               ++count, current->name, current->address, current->defined ? "true" : "false");
+        const char *status_color = current->defined ? defined_color : undefined_color;
+        const char *status_text = current->defined ? "DEFINED" : "UNDEFINED";
+        
+        printf("║%s%3d%s │ %s%-21.21s%s │ %s0x%08X%s │ %s%-21s%s ║\n",
+               header_color, ++count, reset_color,
+               name_color, current->name, reset_color,
+               address_color, current->address, reset_color,
+               status_color, status_text, reset_color);
         current = current->next;
     }
+    
     if (count == 0)
     {
-        printf("  (empty)\n");
+        printf("║    │ %s(no symbols)%s        │           │                       ║\n", 
+               undefined_color, reset_color);
     }
+    
+    printf("%s╚════╧═══════════════════════╧═══════════╧═══════════════════════╝%s\n", header_color, reset_color);
+    printf("%sTotal symbols: %d%s\n\n", header_color, count, reset_color);
 }
 
 symbol_t *symbol_lookup(assembler_t *asm_ctx, const char *name)

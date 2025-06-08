@@ -223,7 +223,7 @@ operand_t parser_parse_operand(parser_t *parser)
     {
         explicit_size = 32;
         parser_advance(parser);
-    } // Check for far pointer literal: segment:offset
+    }    // Check for far pointer literal: segment:offset
     token_t next = lexer_peek_token(parser->lexer);
     if (parser->current_token.type == TOKEN_IMMEDIATE && next.type == TOKEN_COLON)
     {
@@ -231,14 +231,33 @@ operand_t parser_parse_operand(parser_t *parser)
         int32_t segment = parser_parse_immediate(parser);
         // Consume colon
         parser_advance(parser);
-        // Expect offset immediate
+        // Expect offset immediate or label
         if (parser->current_token.type == TOKEN_IMMEDIATE)
         {
             int32_t offset = parser_parse_immediate(parser);
             operand.type = OPERAND_FARPTR;
             operand.value.far_ptr.segment = (uint16_t)segment;
             operand.value.far_ptr.offset = (uint16_t)offset;
+            operand.value.far_ptr.has_label_offset = false;
             // Far pointer uses 32-bit far address (16-bit offset + 16-bit segment)
+            operand.size = 32;
+            return operand;
+        }
+        else if (parser->current_token.type == TOKEN_LABEL)
+        {
+            // Handle far pointer with label as offset: segment:label
+            operand.type = OPERAND_FARPTR;
+            operand.value.far_ptr.segment = (uint16_t)segment;
+            operand.value.far_ptr.has_label_offset = true;
+            
+            // Store label name for later resolution
+            strncpy(operand.value.far_ptr.offset_label, parser->current_token.value, MAX_LABEL_LENGTH - 1);
+            operand.value.far_ptr.offset_label[MAX_LABEL_LENGTH - 1] = '\0';
+            
+            // Register this label as being referenced
+            symbol_reference(parser->assembler, parser->current_token.value);
+            
+            parser_advance(parser);
             operand.size = 32;
             return operand;
         }
@@ -368,14 +387,14 @@ bool parser_parse_directive(parser_t *parser)
                 assembler_error(parser->assembler, "Invalid width value %d at line %d. Must be 16 or 32",
                                 width, parser->current_token.line);
                 return false;
-            }
+            }            asm_mode_t directive_mode = (width == 32) ? MODE_32BIT : MODE_16BIT;
 
-            asm_mode_t directive_mode = (width == 32) ? MODE_32BIT : MODE_16BIT;
-
-            // Check for conflict with command line mode if both are set
-            if (parser->assembler->cmdline_mode_set && parser->assembler->cmdline_mode != directive_mode)
+            // Check for conflict with command line mode if both are set and bit change is not allowed
+            if (parser->assembler->cmdline_mode_set && 
+                parser->assembler->cmdline_mode != directive_mode && 
+                !parser->assembler->bit_change_allowed)
             {
-                assembler_error(parser->assembler, "Conflict of interest: #width %d directive at line %d conflicts with command line flag -m%d",
+                assembler_error(parser->assembler, "Conflict of interest: #width %d directive at line %d conflicts with command line flag -m%d. Use -bc flag to allow bit width changes",
                                 width, parser->current_token.line, parser->assembler->cmdline_mode);
                 return false;
             }

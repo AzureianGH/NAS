@@ -69,11 +69,12 @@ typedef enum
     REG_SI,
     REG_DI,
     REG_BP,
-    REG_SP,
-    REG_CS,
+    REG_SP,    REG_CS,
     REG_DS,
     REG_ES,
     REG_SS,
+    REG_FS,
+    REG_GS,
     // 32-bit registers
     REG_EAX,
     REG_EBX,
@@ -82,8 +83,7 @@ typedef enum
     REG_ESI,
     REG_EDI,
     REG_EBP,
-    REG_ESP,
-    // 8-bit registers
+    REG_ESP,    // 8-bit registers
     REG_AL,
     REG_AH,
     REG_BL,
@@ -91,7 +91,16 @@ typedef enum
     REG_CL,
     REG_CH,
     REG_DL,
-    REG_DH
+    REG_DH,
+    // Control registers
+    REG_CR0,
+    REG_CR1,
+    REG_CR2,
+    REG_CR3,
+    REG_CR4,
+    REG_CR5,
+    REG_CR6,
+    REG_CR7
 } register_t;
 
 // Operand types
@@ -131,11 +140,12 @@ typedef struct
             register_t segment;           // Segment override register (REG_NONE if no override)
             bool has_label;               // Indicates label-based memory operand
             char label[MAX_LABEL_LENGTH]; // Label for direct memory addressing
-        } memory;
-        struct
+        } memory;        struct
         { // Far pointer value
             uint16_t segment;
             uint16_t offset;
+            bool has_label_offset;                 // True if offset is a label
+            char offset_label[MAX_LABEL_LENGTH];   // Label name for offset
         } far_ptr;
         char label[MAX_LABEL_LENGTH];
     } value;
@@ -192,6 +202,7 @@ typedef struct
     asm_mode_t cmdline_mode; // Mode set via command line flags
     bool cmdline_mode_set;   // Whether command line mode was explicitly set
     bool directive_mode_set; // Whether #width directive was used
+    bool bit_change_allowed; // Whether -bc flag was specified to allow bit width changes
     output_format_t format;
     uint32_t origin;
     uint32_t current_address;    

@@ -24,32 +24,46 @@ void print_usage(const char *program_name)
     printf("                         Note: elf format only available in 32-bit mode\n");
     printf("  -o, --output <file>    Output file\n");
     printf("  -v, --verbose          Verbose output\n");
+    printf("  -bc, --bit-change      Allow changing bit width mid-assembly via #width directives\n");
     printf("  -h, --help             Show this help message\n");
     printf("  --version              Show version information\n");
     printf("\nExamples:\n");
     printf("  %s -m16 -f bin test/os.asm -o test/os.bin\n", program_name);
     printf("  %s --mode 16 --format hex input.asm -o output.hex\n", program_name);
+    printf("  %s -bc test16.asm -o test16.bin  # Allow bit width changes\n", program_name);
 }
 
 int main(int argc, char *argv[])
-{
-    char *input_file = NULL;
+{    char *input_file = NULL;
     char *output_file = NULL;
     asm_mode_t mode = MODE_16BIT;
     output_format_t format = FORMAT_BIN;
     bool verbose = false;
+    bool bit_change_allowed = false;
 
     static struct option long_options[] = {
         {"mode", required_argument, 0, 'm'},
         {"format", required_argument, 0, 'f'},
         {"output", required_argument, 0, 'o'},
         {"verbose", no_argument, 0, 'v'},
+        {"bit-change", no_argument, 0, 1}, // Using numeric value for -bc
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 0},
-        {0, 0, 0, 0}};
-
-    int c;
+        {0, 0, 0, 0}};    int c;
     int option_index = 0;
+    
+    // Check for -bc flag before getopt parsing
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-bc") == 0) {
+            bit_change_allowed = true;
+            // Remove this argument from argv to avoid getopt confusion
+            for (int j = i; j < argc - 1; j++) {
+                argv[j] = argv[j + 1];
+            }
+            argc--;
+            i--; // Recheck this position
+        }
+    }
 
     while ((c = getopt_long(argc, argv, "m:f:o:vh", long_options, &option_index)) != -1)
     {
@@ -91,10 +105,12 @@ int main(int argc, char *argv[])
 
         case 'o':
             output_file = optarg;
+            break;        case 'v':
+            verbose = true;
             break;
 
-        case 'v':
-            verbose = true;
+        case 1: // --bit-change
+            bit_change_allowed = true;
             break;
 
         case 'h':
@@ -149,12 +165,11 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Error: Failed to create assembler.\n");
         return 1;
-    }
-
-    // Configure assembler
+    }    // Configure assembler
     assembler_set_cmdline_mode(asm_ctx, mode);
     assembler_set_format(asm_ctx, format);
-    asm_ctx->verbose = verbose;    if (verbose)
+    asm_ctx->verbose = verbose;
+    asm_ctx->bit_change_allowed = bit_change_allowed;if (verbose)
     {
         printf("NAS - Nathan's Assembler\n");
         printf("Input file: %s\n", input_file);
