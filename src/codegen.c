@@ -15,105 +15,201 @@ bool strcasecmp(const char *s1, const char *s2)
 
 bool codegen_ensure_capacity(assembler_t *asm_ctx, size_t additional_size)
 {
-    if (asm_ctx->code_size + additional_size > asm_ctx->code_capacity)
+    // Get current section
+    section_t *current_section = section_get_current(asm_ctx);
+    if (!current_section)
     {
-        size_t new_capacity = asm_ctx->code_capacity * 2;
-        if (new_capacity < asm_ctx->code_size + additional_size)
+        // Fallback to global code buffer if no current section
+        if (asm_ctx->code_size + additional_size > asm_ctx->code_capacity)
         {
-            new_capacity = asm_ctx->code_size + additional_size + 1024;
+            size_t new_capacity = asm_ctx->code_capacity * 2;
+            if (new_capacity < asm_ctx->code_size + additional_size)
+            {
+                new_capacity = asm_ctx->code_size + additional_size + 1024;
+            }
+
+            uint8_t *new_buffer = realloc(asm_ctx->code_buffer, new_capacity);
+            if (!new_buffer)
+            {
+                return false;
+            }
+
+            asm_ctx->code_buffer = new_buffer;
+            asm_ctx->code_capacity = new_capacity;
+        }
+        return true;
+    }
+
+    // Ensure current section has enough capacity
+    if (current_section->size + additional_size > current_section->data_capacity)
+    {
+        size_t new_capacity = current_section->data_capacity * 2;
+        if (new_capacity < current_section->size + additional_size)
+        {
+            new_capacity = current_section->size + additional_size + 1024;
+        }
+        if (new_capacity == 0)
+        {
+            new_capacity = 1024;
         }
 
-        uint8_t *new_buffer = realloc(asm_ctx->code_buffer, new_capacity);
+        uint8_t *new_buffer = realloc(current_section->data, new_capacity);
         if (!new_buffer)
         {
             return false;
         }
 
-        asm_ctx->code_buffer = new_buffer;
-        asm_ctx->code_capacity = new_capacity;
+        current_section->data = new_buffer;
+        current_section->data_capacity = new_capacity;
     }
 
     return true;
 }
 
 bool codegen_emit_byte(assembler_t *asm_ctx, uint8_t byte)
-{
+{    
     // Always advance address
     asm_ctx->current_address++;
 
-    // Only emit on pass 2
-    if (asm_ctx->pass == 2)
+    // Only emit on pass 2 and beyond
+    if (asm_ctx->pass >= 2)
     {
-        if (!codegen_ensure_capacity(asm_ctx, 1))
+        section_t *current_section = section_get_current(asm_ctx);
+        
+        if (current_section)
         {
-            return false;
+            // Emit to current section
+            if (!codegen_ensure_capacity(asm_ctx, 1))
+            {
+                return false;
+            }
+            current_section->data[current_section->size++] = byte;
         }
-        asm_ctx->code_buffer[asm_ctx->code_size++] = byte;
+        else
+        {
+            // Fallback to global code buffer
+            if (!codegen_ensure_capacity(asm_ctx, 1))
+            {
+                return false;
+            }
+            asm_ctx->code_buffer[asm_ctx->code_size++] = byte;
+        }
     }
 
     return true;
 }
 
 bool codegen_emit_word(assembler_t *asm_ctx, uint16_t word)
-{
+{    
     // Always advance address
     asm_ctx->current_address += 2;
 
-    // Only emit on pass 2
-    if (asm_ctx->pass == 2)
+    // Only emit on pass 2 and beyond
+    if (asm_ctx->pass >= 2)
     {
-        if (!codegen_ensure_capacity(asm_ctx, 2))
+        section_t *current_section = section_get_current(asm_ctx);
+        
+        if (current_section)
         {
-            return false;
+            // Emit to current section
+            if (!codegen_ensure_capacity(asm_ctx, 2))
+            {
+                return false;
+            }
+            // Little-endian encoding
+            current_section->data[current_section->size++] = (uint8_t)(word & 0xFF);
+            current_section->data[current_section->size++] = (uint8_t)((word >> 8) & 0xFF);
         }
-
-        // Little-endian encoding
-        asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)(word & 0xFF);
-        asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((word >> 8) & 0xFF);
+        else
+        {
+            // Fallback to global code buffer
+            if (!codegen_ensure_capacity(asm_ctx, 2))
+            {
+                return false;
+            }
+            // Little-endian encoding
+            asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)(word & 0xFF);
+            asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((word >> 8) & 0xFF);
+        }
     }
 
     return true;
 }
 
 bool codegen_emit_dword(assembler_t *asm_ctx, uint32_t dword)
-{
+{    
     // Always advance address
     asm_ctx->current_address += 4;
 
-    // Only emit on pass 2
-    if (asm_ctx->pass == 2)
+    // Only emit on pass 2 and beyond
+    if (asm_ctx->pass >= 2)
     {
-        if (!codegen_ensure_capacity(asm_ctx, 4))
+        section_t *current_section = section_get_current(asm_ctx);
+        
+        if (current_section)
         {
-            return false;
+            // Emit to current section
+            if (!codegen_ensure_capacity(asm_ctx, 4))
+            {
+                return false;
+            }
+            // Little-endian encoding
+            current_section->data[current_section->size++] = (uint8_t)(dword & 0xFF);
+            current_section->data[current_section->size++] = (uint8_t)((dword >> 8) & 0xFF);
+            current_section->data[current_section->size++] = (uint8_t)((dword >> 16) & 0xFF);
+            current_section->data[current_section->size++] = (uint8_t)((dword >> 24) & 0xFF);
         }
-
-        // Little-endian encoding
-        asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)(dword & 0xFF);
-        asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((dword >> 8) & 0xFF);
-        asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((dword >> 16) & 0xFF);
-        asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((dword >> 24) & 0xFF);
+        else
+        {
+            // Fallback to global code buffer
+            if (!codegen_ensure_capacity(asm_ctx, 4))
+            {
+                return false;
+            }
+            // Little-endian encoding
+            asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)(dword & 0xFF);
+            asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((dword >> 8) & 0xFF);
+            asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((dword >> 16) & 0xFF);
+            asm_ctx->code_buffer[asm_ctx->code_size++] = (uint8_t)((dword >> 24) & 0xFF);
+        }
     }
 
     return true;
 }
 
 bool codegen_emit_bytes(assembler_t *asm_ctx, const uint8_t *bytes, size_t count)
-{
+{    
     // Always advance address
     asm_ctx->current_address += count;
 
-    // Only emit on pass 2
-    if (asm_ctx->pass == 2)
+    // Only emit on pass 2 and beyond
+    if (asm_ctx->pass >= 2)
     {
-        if (!codegen_ensure_capacity(asm_ctx, count))
+        section_t *current_section = section_get_current(asm_ctx);
+        
+        if (current_section)
         {
-            return false;
+            // Emit to current section
+            if (!codegen_ensure_capacity(asm_ctx, count))
+            {
+                return false;
+            }
+            for (size_t i = 0; i < count; i++)
+            {
+                current_section->data[current_section->size++] = bytes[i];
+            }
         }
-
-        for (size_t i = 0; i < count; i++)
+        else
         {
-            asm_ctx->code_buffer[asm_ctx->code_size++] = bytes[i];
+            // Fallback to global code buffer
+            if (!codegen_ensure_capacity(asm_ctx, count))
+            {
+                return false;
+            }
+            for (size_t i = 0; i < count; i++)
+            {
+                asm_ctx->code_buffer[asm_ctx->code_size++] = bytes[i];
+            }
         }
     }
 

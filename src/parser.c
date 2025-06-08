@@ -275,15 +275,31 @@ operand_t parser_parse_operand(parser_t *parser)
         {
             operand.size = explicit_size;
         }
-        break;
-    case TOKEN_LABEL:
+        break;    case TOKEN_LABEL:
         // Check if this is a defined symbol (like from #define)
         symbol_t *symbol = symbol_lookup(parser->assembler, parser->current_token.value);
         if (symbol && symbol->defined)
         {
             // Convert defined symbol to immediate operand
             operand.type = OPERAND_IMMEDIATE;
-            operand.value.immediate = (int32_t)symbol->address;
+            
+            // For ELF format, convert relative address to absolute virtual address
+            if (parser->assembler->format == FORMAT_ELF)
+            {
+                // ELF virtual address = BASE_ADDR + HEADERS_SIZE + relative_offset
+                const uint32_t BASE_ADDR = 0x08048000;  // Standard Linux base address
+                const uint32_t ELF_HEADER_SIZE = 52;
+                const uint32_t PROGRAM_HEADER_SIZE = 32;
+                const uint32_t HEADERS_SIZE = ELF_HEADER_SIZE + PROGRAM_HEADER_SIZE;
+                
+                operand.value.immediate = (int32_t)(BASE_ADDR + HEADERS_SIZE + symbol->address);
+            }
+            else
+            {
+                // For other formats, use relative address directly
+                operand.value.immediate = (int32_t)symbol->address;
+            }
+            
             operand.size = explicit_size ? explicit_size : 16; // Default to 16-bit
         }
         else
@@ -372,16 +388,32 @@ bool parser_parse_directive(parser_t *parser)
             assembler_error(parser->assembler, "Expected immediate value after #width directive at line %d",
                             parser->current_token.line);
             return false;
-        } // Handle db (define byte) directive
+        }    // Handle db (define byte) directive    
     }
     else if (strcmp(directive, "#db") == 0)
     {
-        // Parse comma-separated list of byte values
+        // Parse comma-separated list of byte values, expressions, and strings
         do
         {
-            if (parser->current_token.type == TOKEN_IMMEDIATE)
+            if (parser->current_token.type == TOKEN_STRING)
             {
-                int32_t value = parser_parse_immediate(parser);
+                // Handle string literal - emit each character as a byte
+                const char *str = parser->current_token.value;
+                for (size_t i = 0; str[i] != '\0'; i++)
+                {
+                    if (!codegen_emit_byte(parser->assembler, (uint8_t)str[i]))
+                    {
+                        assembler_error(parser->assembler, "Failed to emit string byte at line %d",
+                                        parser->current_token.line);
+                        return false;
+                    }
+                }
+                parser_advance(parser); // consume string token
+            }
+            else
+            {
+                // Parse expression (supports immediates, symbols, and arithmetic)
+                int32_t value = parser_evaluate_expression(parser);
                 if (value < 0 || value > 255)
                 {
                     assembler_error(parser->assembler, "Byte value %d out of range (0-255) at line %d",
@@ -395,9 +427,60 @@ bool parser_parse_directive(parser_t *parser)
                     return false;
                 }
             }
+
+            // Check for comma to continue parsing more values
+            if (parser->current_token.type == TOKEN_COMMA)
+            {
+                parser_advance(parser); // consume comma
+            }
             else
             {
-                assembler_error(parser->assembler, "Expected immediate value in #db directive at line %d",
+                break; // No more values
+            }
+        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
+
+    // Handle dw (define word) directive
+    }
+    else if (strcmp(directive, "#dw") == 0)
+    {
+        // Parse comma-separated list of word values or expressions
+        do
+        {
+            // Parse expression (supports immediates, symbols, and arithmetic)
+            int32_t value = parser_evaluate_expression(parser);
+            if (value < 0 || value > 0xFFFF)
+            {
+                assembler_error(parser->assembler, "Word value %d out of range (0-65535) at line %d",
+                                value, parser->current_token.line);
+                return false;
+            }
+            if (!codegen_emit_word(parser->assembler, (uint16_t)value))
+            {
+                assembler_error(parser->assembler, "Failed to emit word at line %d",
+                                parser->current_token.line);
+                return false;
+            }
+
+            // Check for comma to continue parsing more values
+            if (parser->current_token.type == TOKEN_COMMA)
+            {
+                parser_advance(parser); // consume comma
+            }
+            else
+            {
+                break; // No more values
+            }        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);        // Handle dd (define dword) directive
+    }
+    else if (strcmp(directive, "#dd") == 0)
+    {
+        // Parse comma-separated list of dword values or expressions
+        do
+        {
+            // Parse expression (supports immediates, symbols, and arithmetic)
+            int32_t value = parser_evaluate_expression(parser);
+            if (!codegen_emit_dword(parser->assembler, (uint32_t)value))
+            {
+                assembler_error(parser->assembler, "Failed to emit dword at line %d",
                                 parser->current_token.line);
                 return false;
             }
@@ -413,46 +496,7 @@ bool parser_parse_directive(parser_t *parser)
             }
         } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
 
-        // Handle dw (define word) directive
-    }
-    else if (strcmp(directive, "#dw") == 0)
-    {
-        // Parse comma-separated list of word values
-        do
-        {
-            if (parser->current_token.type == TOKEN_IMMEDIATE)
-            {
-                int32_t value = parser_parse_immediate(parser);
-                if (value < 0 || value > 0xFFFF)
-                {
-                    assembler_error(parser->assembler, "Word value %d out of range (0-65535) at line %d",
-                                    value, parser->current_token.line);
-                    return false;
-                }
-                if (!codegen_emit_word(parser->assembler, (uint16_t)value))
-                {
-                    assembler_error(parser->assembler, "Failed to emit word at line %d",
-                                    parser->current_token.line);
-                    return false;
-                }
-            }
-            else
-            {
-                assembler_error(parser->assembler, "Expected immediate value in #dw directive at line %d",
-                                parser->current_token.line);
-                return false;
-            }
-
-            // Check for comma to continue parsing more values
-            if (parser->current_token.type == TOKEN_COMMA)
-            {
-                parser_advance(parser); // consume comma
-            }
-            else
-            {
-                break; // No more values
-            }
-        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF); // Handle define directive
+        // Handle define directive
     }
     else if (strcmp(directive, "#define") == 0)
     {
@@ -566,6 +610,29 @@ bool parser_parse_directive(parser_t *parser)
                 {
                     assembler_error(parser->assembler, "Expected immediate value after #dw in #times directive at line %d",
                                     parser->current_token.line);
+                    return false;                }
+            }
+            else if (strcmp(data_directive, "#dd") == 0)
+            {
+                // Parse the dword value
+                if (parser->current_token.type == TOKEN_IMMEDIATE)
+                {
+                    int32_t value = parser_parse_immediate(parser);
+                    // Emit the dword 'count' times
+                    for (int32_t i = 0; i < count; i++)
+                    {
+                        if (!codegen_emit_dword(parser->assembler, (uint32_t)value))
+                        {
+                            assembler_error(parser->assembler, "Failed to emit dword at line %d",
+                                            parser->current_token.line);
+                            return false;
+                        }
+                    }
+                }
+                else
+                {
+                    assembler_error(parser->assembler, "Expected immediate value after #dd in #times directive at line %d",
+                                    parser->current_token.line);
                     return false;
                 }
             }
@@ -578,11 +645,142 @@ bool parser_parse_directive(parser_t *parser)
         }
         else
         {
-            assembler_error(parser->assembler, "Expected data directive (#db or #dw) after #times count at line %d",
+            assembler_error(parser->assembler, "Expected data directive (#db, #dw, or #dd) after #times count at line %d",
+                            parser->current_token.line);
+            return false;}
+    }
+    // Handle section directive
+    else if (strcmp(directive, "#section") == 0)
+    {        if (parser->current_token.type == TOKEN_LABEL)
+        {
+            char section_name[MAX_LABEL_LENGTH];
+            strncpy(section_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
+            section_name[MAX_LABEL_LENGTH - 1] = '\0';
+            parser_advance(parser);
+
+            // Check if section already exists
+            section_t *existing_section = section_find(parser->assembler, section_name);
+            if (!existing_section)
+            {
+                // Determine section type based on name
+                section_type_t type = SECTION_TEXT; // Default
+                if (strcmp(section_name, ".data") == 0)
+                    type = SECTION_DATA;
+                else if (strcmp(section_name, ".bss") == 0)
+                    type = SECTION_BSS;
+
+                // Create new section
+                section_t *new_section = section_create(section_name, type);
+                if (!new_section)
+                {
+                    assembler_error(parser->assembler, "Failed to create section '%s' at line %d",
+                                    section_name, parser->current_token.line);
+                    return false;
+                }
+
+                if (!section_add(parser->assembler, new_section))
+                {
+                    assembler_error(parser->assembler, "Failed to add section '%s' at line %d",
+                                    section_name, parser->current_token.line);
+                    return false;
+                }
+                existing_section = new_section;
+            }            // Switch to the section
+            parser->assembler->current_section_ptr = existing_section;
+        }
+        else
+        {
+            assembler_error(parser->assembler, "Expected section name after #section directive at line %d",
                             parser->current_token.line);
             return false;
         }
-    }
+    }    // Handle resb directive (reserve bytes)
+    else if (strcmp(directive, "#resb") == 0)
+    {
+        if (parser->current_token.type == TOKEN_IMMEDIATE)
+        {
+            int32_t count = parser_parse_immediate(parser);
+            if (count < 0)
+            {
+                assembler_error(parser->assembler, "Negative byte count %d in #resb directive at line %d",
+                                count, parser->current_token.line);
+                return false;
+            }
+
+            // Advance current address and update section size
+            parser->assembler->current_address += count;
+            
+            // Update current section size if we're in a section
+            section_t *current_section = section_get_current(parser->assembler);
+            if (current_section)
+            {
+                current_section->size += count;
+            }
+        }
+        else
+        {
+            assembler_error(parser->assembler, "Expected immediate value after #resb directive at line %d",
+                            parser->current_token.line);
+            return false;
+        }
+    }    // Handle resw directive (reserve words)
+    else if (strcmp(directive, "#resw") == 0)
+    {
+        if (parser->current_token.type == TOKEN_IMMEDIATE)
+        {
+            int32_t count = parser_parse_immediate(parser);
+            if (count < 0)
+            {
+                assembler_error(parser->assembler, "Negative word count %d in #resw directive at line %d",
+                                count, parser->current_token.line);
+                return false;
+            }
+
+            // Advance current address by count * 2 bytes and update section size
+            parser->assembler->current_address += count * 2;
+            
+            // Update current section size if we're in a section
+            section_t *current_section = section_get_current(parser->assembler);
+            if (current_section)
+            {
+                current_section->size += count * 2;
+            }
+        }
+        else
+        {
+            assembler_error(parser->assembler, "Expected immediate value after #resw directive at line %d",
+                            parser->current_token.line);
+            return false;
+        }
+    }    // Handle resd directive (reserve dwords)
+    else if (strcmp(directive, "#resd") == 0)
+    {
+        if (parser->current_token.type == TOKEN_IMMEDIATE)
+        {
+            int32_t count = parser_parse_immediate(parser);
+            if (count < 0)
+            {
+                assembler_error(parser->assembler, "Negative dword count %d in #resd directive at line %d",
+                                count, parser->current_token.line);
+                return false;
+            }
+
+            // Advance current address by count * 4 bytes and update section size
+            parser->assembler->current_address += count * 4;
+            
+            // Update current section size if we're in a section
+            section_t *current_section = section_get_current(parser->assembler);
+            if (current_section)
+            {
+                current_section->size += count * 4;
+            }
+        }
+        else
+        {
+            assembler_error(parser->assembler, "Expected immediate value after #resd directive at line %d",
+                            parser->current_token.line);
+            return false;
+        }    }
     else
     {
         // Unknown directive
@@ -628,15 +826,11 @@ bool parser_parse_line(parser_t *parser, instruction_t *instruction)
     // Handle labels
     if (parser->current_token.type == TOKEN_LABEL)
     {
-        token_t next = lexer_peek_token(parser->lexer);
-        if (next.type != TOKEN_INSTRUCTION)
+        token_t next = lexer_peek_token(parser->lexer);        if (next.type != TOKEN_INSTRUCTION)
         {
-            // This is a label definition - only define on pass 1
-            if (parser->assembler->pass == 1)
-            {
-                symbol_define(parser->assembler, parser->current_token.value,
-                              codegen_get_current_address(parser->assembler));
-            }
+            // This is a label definition - define in all passes to allow address updates
+            symbol_define(parser->assembler, parser->current_token.value,
+                          codegen_get_current_address(parser->assembler));
             parser_advance(parser);
             // Check for colon after label
             if (parser->current_token.type == TOKEN_COLON)

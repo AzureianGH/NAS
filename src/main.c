@@ -19,9 +19,9 @@ void print_version()
 void print_usage(const char *program_name)
 {
     printf("Usage: %s [options] input_file -o output_file\n", program_name);
-    printf("Options:\n");
-    printf("  -m, --mode <mode>      Assembly mode (16 or 32, default: 16)\n");
-    printf("  -f, --format <format>  Output format (bin, hex, default: bin)\n");
+    printf("Options:\n");    printf("  -m, --mode <mode>      Assembly mode (16 or 32, default: 16)\n");
+    printf("  -f, --format <format>  Output format (bin, hex, elf, default: bin)\n");
+    printf("                         Note: elf format only available in 32-bit mode\n");
     printf("  -o, --output <file>    Output file\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
@@ -69,9 +69,7 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "Error: Invalid mode '%s'. Use 16 or 32.\n", optarg);
                 return 1;
             }
-            break;
-
-        case 'f':
+            break;        case 'f':
             if (strcmp(optarg, "bin") == 0)
             {
                 format = FORMAT_BIN;
@@ -80,9 +78,13 @@ int main(int argc, char *argv[])
             {
                 format = FORMAT_HEX;
             }
+            else if (strcmp(optarg, "elf") == 0)
+            {
+                format = FORMAT_ELF;
+            }
             else
             {
-                fprintf(stderr, "Error: Invalid format '%s'. Use bin or hex.\n", optarg);
+                fprintf(stderr, "Error: Invalid format '%s'. Use bin, hex, or elf.\n", optarg);
                 return 1;
             }
             break;
@@ -119,9 +121,7 @@ int main(int argc, char *argv[])
     if (optind < argc)
     {
         input_file = argv[optind];
-    }
-
-    // Validate arguments
+    }    // Validate arguments
     if (!input_file)
     {
         fprintf(stderr, "Error: No input file specified.\n");
@@ -136,6 +136,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // Validate ELF format is only used with 32-bit mode
+    if (format == FORMAT_ELF && mode != MODE_32BIT)
+    {
+        fprintf(stderr, "Error: ELF format (-f elf) is only available in 32-bit mode (-m 32).\n");
+        return 1;
+    }
+
     // Create assembler
     assembler_t *asm_ctx = assembler_create();
     if (!asm_ctx)
@@ -147,15 +154,13 @@ int main(int argc, char *argv[])
     // Configure assembler
     assembler_set_cmdline_mode(asm_ctx, mode);
     assembler_set_format(asm_ctx, format);
-    asm_ctx->verbose = verbose;
-
-    if (verbose)
+    asm_ctx->verbose = verbose;    if (verbose)
     {
         printf("NAS - Nathan's Assembler\n");
         printf("Input file: %s\n", input_file);
         printf("Output file: %s\n", output_file);
         printf("Mode: %d-bit\n", mode);
-        printf("Format: %s\n", format == FORMAT_BIN ? "binary" : "hex");
+        printf("Format: %s\n", format == FORMAT_BIN ? "binary" : (format == FORMAT_HEX ? "hex" : "elf"));
         printf("\n");
     }
 

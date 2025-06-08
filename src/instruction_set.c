@@ -166,7 +166,8 @@ static const instruction_def_t instruction_table[] = {
     {"iret", ENC_SINGLE, 0xCF, 0, false, false, false, 0}, // Interrupt return
     {"hlt", ENC_SINGLE, 0xF4, 0, false, false, false, 0},
     {"wait", ENC_SINGLE, 0x9B, 0, false, false, false, 0},
-    {"lock", ENC_SINGLE, 0xF0, 0, false, false, false, 0}, // Lock prefix
+    {"lock", ENC_SINGLE, 0xF0, 0, false, false, false, 0},      // Lock prefix
+    {"lgdt", ENC_TWO_BYTE_MEM, 0x01, 2, true, false, false, 1}, // Load Global Descriptor Table
 
     // Processor control
     {"nop", ENC_SINGLE, 0x90, 0, false, false, false, 0},
@@ -200,6 +201,7 @@ static const instruction_def_t instruction_table[] = {
 
 static bool encode_arith_mem_imm(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx);
 static bool encode_mov_mem_imm(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx);
+static bool encode_two_byte_mem(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx);
 
 // Function to get the opposite condition opcode for conditional jumps
 static uint8_t get_opposite_condition_opcode(uint8_t opcode)
@@ -307,33 +309,75 @@ uint8_t make_modrm(uint8_t mod, uint8_t reg, uint8_t rm)
     return (mod << 6) | (reg << 3) | rm;
 }
 
+// Helper function to get r/m field for 16-bit base+index addressing modes
+uint8_t get_base_index_rm(register_t base_reg, register_t index_reg)
+{
+    // 16-bit addressing mode r/m field encoding for base+index combinations
+    // Based on Intel x86 16-bit addressing modes:
+    // r/m = 0: [BX + SI]
+    // r/m = 1: [BX + DI]
+    // r/m = 2: [BP + SI]
+    // r/m = 3: [BP + DI]
+
+    if (base_reg == REG_BX && index_reg == REG_SI)
+    {
+        return 0; // [BX + SI]
+    }
+    else if (base_reg == REG_BX && index_reg == REG_DI)
+    {
+        return 1; // [BX + DI]
+    }
+    else if (base_reg == REG_BP && index_reg == REG_SI)
+    {
+        return 2; // [BP + SI]
+    }
+    else if (base_reg == REG_BP && index_reg == REG_DI)
+    {
+        return 3; // [BP + DI]
+    }
+    else
+    {
+        // Invalid combination for 16-bit addressing
+        // Return default to BP+SI (most commonly used)
+        return 2;
+    }
+}
+
 uint8_t register_to_modrm(register_t reg)
 {
     switch (reg)
     {
     case REG_AL:
     case REG_AX:
+    case REG_EAX:
         return 0;
     case REG_CL:
     case REG_CX:
+    case REG_ECX:
         return 1;
     case REG_DL:
     case REG_DX:
+    case REG_EDX:
         return 2;
     case REG_BL:
     case REG_BX:
+    case REG_EBX:
         return 3;
     case REG_AH:
     case REG_SP:
+    case REG_ESP:
         return 4;
     case REG_CH:
     case REG_BP:
+    case REG_EBP:
         return 5;
     case REG_DH:
     case REG_SI:
+    case REG_ESI:
         return 6;
     case REG_BH:
     case REG_DI:
+    case REG_EDI:
         return 7;
     // Segment registers
     case REG_ES:
@@ -375,6 +419,15 @@ int get_register_size(register_t reg)
     case REG_ES:
     case REG_SS:
         return 16;
+    case REG_EAX:
+    case REG_EBX:
+    case REG_ECX:
+    case REG_EDX:
+    case REG_ESI:
+    case REG_EDI:
+    case REG_EBP:
+    case REG_ESP:
+        return 32;
     default:
         return 0;
     }
@@ -509,7 +562,7 @@ static bool encode_mov_reg_reg(const instruction_t *instr, uint8_t *buffer, size
     return true;
 }
 
-static bool encode_mov_reg_imm(const instruction_t *instr, uint8_t *buffer, size_t *size)
+static bool encode_mov_reg_imm(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
 {
     if (instr->operand_count != 2 ||
         instr->operands[0].type != OPERAND_REGISTER ||
@@ -530,6 +583,30 @@ static bool encode_mov_reg_imm(const instruction_t *instr, uint8_t *buffer, size
         buffer[1] = (uint8_t)value;
         *size = 2;
     }
+    else if (reg_size == 32)
+    {
+        // Only add 0x66 prefix if we're in 16-bit mode and generating 32-bit instructions
+        if (asm_ctx->mode == MODE_16BIT)
+        {
+            buffer[0] = 0x66;            // Operand size prefix for 32-bit operand in 16-bit mode
+            buffer[1] = 0xB8 + reg_code; // MOV r32, imm32
+            buffer[2] = (uint8_t)(value & 0xFF);
+            buffer[3] = (uint8_t)((value >> 8) & 0xFF);
+            buffer[4] = (uint8_t)((value >> 16) & 0xFF);
+            buffer[5] = (uint8_t)((value >> 24) & 0xFF);
+            *size = 6;
+        }
+        else
+        {
+            // In 32-bit mode, no prefix needed for 32-bit operations
+            buffer[0] = 0xB8 + reg_code; // MOV r32, imm32
+            buffer[1] = (uint8_t)(value & 0xFF);
+            buffer[2] = (uint8_t)((value >> 8) & 0xFF);
+            buffer[3] = (uint8_t)((value >> 16) & 0xFF);
+            buffer[4] = (uint8_t)((value >> 24) & 0xFF);
+            *size = 5;
+        }
+    }
     else
     {
         buffer[0] = 0xB8 + reg_code; // MOV r16, imm16
@@ -540,7 +617,7 @@ static bool encode_mov_reg_imm(const instruction_t *instr, uint8_t *buffer, size
     return true;
 }
 
-static bool encode_reg_reg_generic(const instruction_t *instr, uint8_t *buffer, size_t *size, const instruction_def_t *def)
+static bool encode_reg_reg_generic(const instruction_t *instr, uint8_t *buffer, size_t *size, const instruction_def_t *def, assembler_t *asm_ctx)
 {
     if (instr->operand_count != 2 ||
         instr->operands[0].type != OPERAND_REGISTER ||
@@ -563,10 +640,28 @@ static bool encode_reg_reg_generic(const instruction_t *instr, uint8_t *buffer, 
     {
         return false; // Size mismatch
     }
-
     if (dst_size == 8)
     {
         buffer[0] = def->opcode - 1; // 8-bit version is typically opcode - 1
+    }
+    else if (dst_size == 32)
+    {
+        // Only add 0x66 prefix if we're in 16-bit mode
+        if (asm_ctx->mode == MODE_16BIT)
+        {
+            buffer[0] = 0x66;        // 32-bit operand prefix for 16-bit mode
+            buffer[1] = def->opcode; // 32-bit version
+            buffer[2] = make_modrm(3, src_code, dst_code);
+            *size = 3;
+        }
+        else
+        {
+            // In 32-bit mode, no prefix needed for 32-bit operations
+            buffer[0] = def->opcode; // 32-bit version
+            buffer[1] = make_modrm(3, src_code, dst_code);
+            *size = 2;
+        }
+        return true;
     }
     else
     {
@@ -597,24 +692,45 @@ uint8_t register_to_rm16(register_t reg)
     }
 }
 
-// Helper function to get r/m encoding for base+index addressing combinations
-static uint8_t get_base_index_rm(register_t base, register_t index)
+uint8_t register_to_rm32(register_t reg)
 {
-    // Handle base+index combinations for 16-bit addressing
-    if (base == REG_BX && index == REG_SI)
-        return 0; // [bx+si]
-    if (base == REG_BX && index == REG_DI)
-        return 1; // [bx+di]
-    if (base == REG_BP && index == REG_SI)
-        return 2; // [bp+si]
-    if (base == REG_BP && index == REG_DI)
-        return 3; // [bp+di]
-
-    // Invalid base+index combination for 16-bit addressing
-    return 6; // Default to BP addressing as fallback
+    // 32-bit memory addressing mode r/m field encoding
+    switch (reg)
+    {
+    case REG_EAX:
+        return 0; // [eax]
+    case REG_ECX:
+        return 1; // [ecx]
+    case REG_EDX:
+        return 2; // [edx]
+    case REG_EBX:
+        return 3; // [ebx]
+    case REG_ESP:
+        return 4; // [esp] - requires SIB byte
+    case REG_EBP:
+        return 5; // [ebp+disp] (note: [ebp] alone is actually [ebp+0])
+    case REG_ESI:
+        return 6; // [esi]
+    case REG_EDI:
+        return 7; // [edi]
+    default:
+        return 5; // Default to EBP addressing
+    }
 }
 
-static bool encode_arith_mem_reg(const instruction_t *instr, uint8_t *buffer, size_t *size)
+uint8_t register_to_rm(register_t reg, asm_mode_t mode)
+{
+    if (mode == MODE_32BIT)
+    {
+        return register_to_rm32(reg);
+    }
+    else
+    {
+        return register_to_rm16(reg);
+    }
+}
+
+static bool encode_arith_mem_reg(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
 {
     if (instr->operand_count != 2 ||
         instr->operands[0].type != OPERAND_MEMORY ||
@@ -630,62 +746,70 @@ static bool encode_arith_mem_reg(const instruction_t *instr, uint8_t *buffer, si
 
     uint8_t src_code = register_to_modrm(src_reg);
 
-    // Check if 8-bit or 16-bit operation
+    // Check if 8-bit, 16-bit, or 32-bit operation
     int src_size = get_register_size(src_reg);
 
     // Determine the opcode based on operation and size
     uint8_t opcode;
     if (strcasecmp(instr->mnemonic, "add") == 0)
     {
-        opcode = (src_size == 8) ? 0x00 : 0x01; // ADD r/m8,r8 or ADD r/m16,r16
+        opcode = (src_size == 8) ? 0x00 : 0x01; // ADD r/m8,r8 or ADD r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "sub") == 0)
     {
-        opcode = (src_size == 8) ? 0x28 : 0x29; // SUB r/m8,r8 or SUB r/m16,r16
+        opcode = (src_size == 8) ? 0x28 : 0x29; // SUB r/m8,r8 or SUB r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "and") == 0)
     {
-        opcode = (src_size == 8) ? 0x20 : 0x21; // AND r/m8,r8 or AND r/m16,r16
+        opcode = (src_size == 8) ? 0x20 : 0x21; // AND r/m8,r8 or AND r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "or") == 0)
     {
-        opcode = (src_size == 8) ? 0x08 : 0x09; // OR r/m8,r8 or OR r/m16,r16
+        opcode = (src_size == 8) ? 0x08 : 0x09; // OR r/m8,r8 or OR r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "xor") == 0)
     {
-        opcode = (src_size == 8) ? 0x30 : 0x31; // XOR r/m8,r8 or XOR r/m16,r16
+        opcode = (src_size == 8) ? 0x30 : 0x31; // XOR r/m8,r8 or XOR r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "cmp") == 0)
     {
-        opcode = (src_size == 8) ? 0x38 : 0x39; // CMP r/m8,r8 or CMP r/m16,r16
+        opcode = (src_size == 8) ? 0x38 : 0x39; // CMP r/m8,r8 or CMP r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "adc") == 0)
     {
-        opcode = (src_size == 8) ? 0x10 : 0x11; // ADC r/m8,r8 or ADC r/m16,r16
+        opcode = (src_size == 8) ? 0x10 : 0x11; // ADC r/m8,r8 or ADC r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "sbb") == 0)
     {
-        opcode = (src_size == 8) ? 0x18 : 0x19; // SBB r/m8,r8 or SBB r/m16,r16
+        opcode = (src_size == 8) ? 0x18 : 0x19; // SBB r/m8,r8 or SBB r/m16/32,r16/32
     }
     else if (strcasecmp(instr->mnemonic, "test") == 0)
     {
-        opcode = (src_size == 8) ? 0x84 : 0x85; // TEST r/m8,r8 or TEST r/m16,r16
+        opcode = (src_size == 8) ? 0x84 : 0x85; // TEST r/m8,r8 or TEST r/m16/32,r16/32
     }
     else
     {
         return false; // Unsupported arithmetic instruction
     }
+    size_t opcode_offset = 0;
 
-    buffer[0] = opcode;
+    // Add operand size prefix for 32-bit operations only in 16-bit mode
+    if (src_size == 32 && asm_ctx->mode == MODE_16BIT)
+    {
+        buffer[0] = 0x66; // Operand size prefix
+        opcode_offset = 1;
+    }
+
+    buffer[opcode_offset] = opcode;
 
     // Check for different memory addressing modes
     if (base_reg == REG_NONE)
     {
         // Direct memory addressing: mod=00, r/m=6
-        buffer[1] = make_modrm(0, src_code, 6);
-        buffer[2] = (uint8_t)(displacement & 0xFF);
-        buffer[3] = (uint8_t)((displacement >> 8) & 0xFF);
-        *size = 4;
+        buffer[opcode_offset + 1] = make_modrm(0, src_code, 6);
+        buffer[opcode_offset + 2] = (uint8_t)(displacement & 0xFF);
+        buffer[opcode_offset + 3] = (uint8_t)((displacement >> 8) & 0xFF);
+        *size = opcode_offset + 4;
         return true;
     }
 
@@ -699,57 +823,57 @@ static bool encode_arith_mem_reg(const instruction_t *instr, uint8_t *buffer, si
         if (displacement == 0 && base_reg != REG_BP)
         {
             // [base+index] - mod=00 (except BP which always needs displacement)
-            buffer[1] = make_modrm(0, src_code, rm_code);
-            *size = 2;
+            buffer[opcode_offset + 1] = make_modrm(0, src_code, rm_code);
+            *size = opcode_offset + 2;
         }
         else if (displacement >= -128 && displacement <= 127)
         {
             // [base+index+disp8] - mod=01
-            buffer[1] = make_modrm(1, src_code, rm_code);
-            buffer[2] = (uint8_t)displacement;
-            *size = 3;
+            buffer[opcode_offset + 1] = make_modrm(1, src_code, rm_code);
+            buffer[opcode_offset + 2] = (uint8_t)displacement;
+            *size = opcode_offset + 3;
         }
         else
         {
             // [base+index+disp16] - mod=10
-            buffer[1] = make_modrm(2, src_code, rm_code);
-            buffer[2] = (uint8_t)(displacement & 0xFF);
-            buffer[3] = (uint8_t)((displacement >> 8) & 0xFF);
-            *size = 4;
+            buffer[opcode_offset + 1] = make_modrm(2, src_code, rm_code);
+            buffer[opcode_offset + 2] = (uint8_t)(displacement & 0xFF);
+            buffer[opcode_offset + 3] = (uint8_t)((displacement >> 8) & 0xFF);
+            *size = opcode_offset + 4;
         }
         return true;
     }
 
     // Single base register addressing
-    uint8_t base_code = register_to_rm16(base_reg); // Use 16-bit addressing
+    uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode); // Use mode-appropriate addressing
 
     // Determine addressing mode based on displacement
     if (displacement == 0 && base_reg != REG_BP)
     {
         // [reg] - mod=00 (except BP which always needs displacement)
-        buffer[1] = make_modrm(0, src_code, base_code);
-        *size = 2;
+        buffer[opcode_offset + 1] = make_modrm(0, src_code, base_code);
+        *size = opcode_offset + 2;
     }
     else if (displacement >= -128 && displacement <= 127)
     {
         // [reg+disp8] - mod=01
-        buffer[1] = make_modrm(1, src_code, base_code);
-        buffer[2] = (uint8_t)displacement;
-        *size = 3;
+        buffer[opcode_offset + 1] = make_modrm(1, src_code, base_code);
+        buffer[opcode_offset + 2] = (uint8_t)displacement;
+        *size = opcode_offset + 3;
     }
     else
     {
         // [reg+disp16] - mod=10
-        buffer[1] = make_modrm(2, src_code, base_code);
-        buffer[2] = (uint8_t)(displacement & 0xFF);
-        buffer[3] = (uint8_t)((displacement >> 8) & 0xFF);
-        *size = 4;
+        buffer[opcode_offset + 1] = make_modrm(2, src_code, base_code);
+        buffer[opcode_offset + 2] = (uint8_t)(displacement & 0xFF);
+        buffer[opcode_offset + 3] = (uint8_t)((displacement >> 8) & 0xFF);
+        *size = opcode_offset + 4;
     }
 
     return true;
 }
 
-static bool encode_mov_reg_mem(const instruction_t *instr, uint8_t *buffer, size_t *size)
+static bool encode_mov_reg_mem(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
 {
     if (instr->operand_count != 2 ||
         instr->operands[0].type != OPERAND_REGISTER ||
@@ -820,7 +944,7 @@ static bool encode_mov_reg_mem(const instruction_t *instr, uint8_t *buffer, size
     }
 
     // Single base register addressing
-    uint8_t base_code = register_to_rm16(base_reg); // Use 16-bit addressing
+    uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode); // Use mode-appropriate addressing
 
     // Determine addressing mode based on displacement
     if (displacement == 0 && base_reg != REG_BP)
@@ -848,7 +972,7 @@ static bool encode_mov_reg_mem(const instruction_t *instr, uint8_t *buffer, size
     return true;
 }
 
-static bool encode_mov_mem_reg(const instruction_t *instr, uint8_t *buffer, size_t *size)
+static bool encode_mov_mem_reg(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
 {
     if (instr->operand_count != 2 ||
         instr->operands[0].type != OPERAND_MEMORY ||
@@ -919,7 +1043,7 @@ static bool encode_mov_mem_reg(const instruction_t *instr, uint8_t *buffer, size
     }
 
     // Single base register addressing
-    uint8_t base_code = register_to_rm16(base_reg); // Use 16-bit addressing
+    uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode); // Use mode-appropriate addressing
 
     // Determine addressing mode based on displacement
     if (displacement == 0 && base_reg != REG_BP)
@@ -962,7 +1086,7 @@ static bool encode_int_imm(const instruction_t *instr, uint8_t *buffer, size_t *
     return true;
 }
 
-static bool encode_arith_reg_imm(const instruction_t *instr, uint8_t *buffer, size_t *size)
+static bool encode_arith_reg_imm(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
 {
     if (instr->operand_count != 2 ||
         instr->operands[0].type != OPERAND_REGISTER ||
@@ -975,6 +1099,7 @@ static bool encode_arith_reg_imm(const instruction_t *instr, uint8_t *buffer, si
     int32_t value = instr->operands[1].value.immediate;
     uint8_t reg_code = register_to_modrm(reg);
     int reg_size = get_register_size(reg);
+
     // Determine the ModR/M reg field based on instruction
     uint8_t modrm_reg;
     if (strcasecmp(instr->mnemonic, "add") == 0)
@@ -1014,8 +1139,59 @@ static bool encode_arith_reg_imm(const instruction_t *instr, uint8_t *buffer, si
         return false; // Unsupported arithmetic instruction
     }
 
-    // Check if we can use 8-bit immediate (sign-extended)
-    if (value >= -128 && value <= 127 && reg_size == 16)
+    // Handle 32-bit operands
+    if (reg_size == 32)
+    {
+        // Check if we can use 8-bit immediate (sign-extended)
+        if (value >= -128 && value <= 127)
+        {
+            // Use 8-bit immediate (sign-extended) - opcode 0x83 with prefix only in 16-bit mode
+            if (asm_ctx->mode == MODE_16BIT)
+            {
+                buffer[0] = 0x66; // Operand size prefix for 32-bit operand in 16-bit mode
+                buffer[1] = 0x83;
+                buffer[2] = make_modrm(3, modrm_reg, reg_code);
+                buffer[3] = (uint8_t)value;
+                *size = 4;
+            }
+            else
+            {
+                // In 32-bit mode, no prefix needed for 32-bit operations
+                buffer[0] = 0x83;
+                buffer[1] = make_modrm(3, modrm_reg, reg_code);
+                buffer[2] = (uint8_t)value;
+                *size = 3;
+            }
+        }
+        else
+        {
+            // 32-bit register with 32-bit immediate - opcode 0x81 with prefix only in 16-bit mode
+            if (asm_ctx->mode == MODE_16BIT)
+            {
+                buffer[0] = 0x66; // Operand size prefix for 32-bit operand in 16-bit mode
+                buffer[1] = 0x81;
+                buffer[2] = make_modrm(3, modrm_reg, reg_code);
+                buffer[3] = (uint8_t)(value & 0xFF);
+                buffer[4] = (uint8_t)((value >> 8) & 0xFF);
+                buffer[5] = (uint8_t)((value >> 16) & 0xFF);
+                buffer[6] = (uint8_t)((value >> 24) & 0xFF);
+                *size = 7;
+            }
+            else
+            {
+                // In 32-bit mode, no prefix needed for 32-bit operations
+                buffer[0] = 0x81;
+                buffer[1] = make_modrm(3, modrm_reg, reg_code);
+                buffer[2] = (uint8_t)(value & 0xFF);
+                buffer[3] = (uint8_t)((value >> 8) & 0xFF);
+                buffer[4] = (uint8_t)((value >> 16) & 0xFF);
+                buffer[5] = (uint8_t)((value >> 24) & 0xFF);
+                *size = 6;
+            }
+        }
+    }
+    // Check if we can use 8-bit immediate (sign-extended) for 16-bit
+    else if (value >= -128 && value <= 127 && reg_size == 16)
     {
         // Use 8-bit immediate (sign-extended) - opcode 0x83
         buffer[0] = 0x83;
@@ -1141,9 +1317,16 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 *size = 3;
             }
             else
-            { // Short jump/conditional jump - 2 bytes
-                uint32_t instruction_size = 2;
-                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);
+            { // Jump/conditional jump - determine optimal size first
+                // Pre-calculate with both short and long jump sizes to determine optimal
+                uint32_t short_size = 2;
+                uint32_t long_size = (strcasecmp(instr->mnemonic, "jmp") == 0) ? 3 : 4;
+
+                int32_t short_displacement = (int32_t)(target_addr - current_addr - short_size);
+                bool needs_long_jump = (short_displacement < -128 || short_displacement > 127);
+
+                uint32_t optimal_size = needs_long_jump ? long_size : short_size;
+                int32_t displacement = (int32_t)(target_addr - current_addr - optimal_size);
 
                 // Handle the case where target equals current address (jump to next instruction)
                 if (target_addr == current_addr)
@@ -1153,16 +1336,29 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
 
                 if (asm_ctx->verbose)
                 {
-                    printf("DEBUG: JMP displacement calculation: target=0x%04X, current=0x%04X, size=%d, displacement=%d\n",
-                           target_addr, current_addr, instruction_size, displacement);
+                    printf("DEBUG: JMP displacement calculation: target=0x%04X, current=0x%04X, optimal_size=%d, displacement=%d\n",
+                           target_addr, current_addr, optimal_size, displacement);
                 }
-                if (displacement < -128 || displacement > 127)
+
+                if (needs_long_jump)
                 {
-                    // Displacement too large for short jump
-                    if (strcasecmp(instr->mnemonic, "jmp") == 0)
+                    // Only signal size change in pass 2+ if we were previously using short jump
+                    // (in pass 1, we always assume short jumps for initial estimates)
+                    if (asm_ctx->pass >= 2 && asm_ctx->pass == 2)
                     {
-                        // For unconditional jumps, use near jump (0xE9) with 16-bit displacement
-                        buffer[0] = 0xE9; // Near JMP opcode                        // Calculate displacement for near jump (3 bytes total)
+                        asm_ctx->sizes_changed = true;
+                        if (asm_ctx->verbose)
+                        {
+                            printf("DEBUG: Instruction size change detected - short jump converted to long jump\n");
+                        }
+                    }
+
+                    // Use long jump
+                    if (strcasecmp(instr->mnemonic, "jmp") == 0)
+                    {                     // For unconditional jumps, use near jump (0xE9) with 16-bit displacement
+                        buffer[0] = 0xE9; // Near JMP opcode
+
+                        // Calculate displacement for near jump (3 bytes total)
                         uint32_t near_instruction_size = 3;
                         int32_t near_displacement = (int32_t)(target_addr - current_addr - near_instruction_size);
 
@@ -1191,11 +1387,11 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                                 printf("ERROR: Cannot find near condition for opcode 0x%02X\n", def->opcode);
                             }
                             return false;
-                        }
-
-                        // Use 0F 8x near conditional jump (4 bytes total)
+                        } // Use 0F 8x near conditional jump (4 bytes total)
                         buffer[0] = 0x0F;        // Two-byte opcode prefix
-                        buffer[1] = near_opcode; // Near conditional jump opcode                          // Calculate displacement for near conditional jump (4 bytes total)
+                        buffer[1] = near_opcode; // Near conditional jump opcode
+
+                        // Calculate displacement for near conditional jump (4 bytes total)
                         uint32_t near_instruction_size = 4;
                         int32_t near_displacement = (int32_t)(target_addr - current_addr - near_instruction_size);
 
@@ -1225,8 +1421,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
         }
         else
         {
-            // Target not available - need to estimate instruction size carefully
-            // To avoid cascading size changes, try to be conservative but consistent
+            // Target not available - need to estimate instruction size conservatively
+            // Use consistent size estimates across all passes to avoid cascading changes
             if (def->opcode == 0xE8)
             {
                 // CALL instruction - always 3 bytes
@@ -1237,8 +1433,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             }
             else if (strcasecmp(instr->mnemonic, "jmp") == 0)
             {
-                // For unconditional jumps, start with short jump (2 bytes) in pass 1
-                // The second pass will upgrade to near jump if needed
+                // For unconditional jumps, start with short jump but be prepared to upgrade
+                // In pass 1, always assume short jump for initial estimates
                 if (asm_ctx->pass == 1)
                 {
                     buffer[0] = def->opcode; // Short jump opcode (EB)
@@ -1247,7 +1443,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 }
                 else
                 {
-                    // Pass 2: fallback to near jump if needed (should not reach here normally)
+                    // Pass 2+: Use conservative estimate (near jump) when target unknown
+                    // This prevents size underestimation that causes cascading changes
                     buffer[0] = 0xE9; // Near JMP opcode
                     buffer[1] = 0x00; // Placeholder low byte
                     buffer[2] = 0x00; // Placeholder high byte
@@ -1256,8 +1453,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             }
             else
             {
-                // For conditional jumps, start with short jump (2 bytes) in pass 1
-                // The second pass will upgrade to near conditional jump if needed
+                // For conditional jumps, start with short jump but be prepared to upgrade
+                // In pass 1, always assume short jump for initial estimates
                 if (asm_ctx->pass == 1)
                 {
                     buffer[0] = def->opcode; // Short conditional jump opcode
@@ -1266,7 +1463,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 }
                 else
                 {
-                    // Pass 2: fallback to near conditional jump if needed (should not reach here normally)
+                    // Pass 2+: Use conservative estimate (near conditional jump) when target unknown
+                    // This prevents size underestimation that causes cascading changes
                     uint8_t near_opcode = get_near_condition_opcode(def->opcode);
                     if (near_opcode != 0)
                     {
@@ -1287,7 +1485,9 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             }
             return true;
         }
-    } // Default case with placeholder
+    }
+
+    // Default case with placeholder - use same logic as when target not available
     if (def->opcode == 0xE8)
     {
         // CALL instruction - always 3 bytes
@@ -1307,7 +1507,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
         }
         else
         {
-            // Pass 2: use near jump if needed
+            // Pass 2+: Use conservative estimate (near jump) when target unknown
             buffer[0] = 0xE9; // Near JMP opcode
             buffer[1] = 0x00; // Placeholder low byte
             buffer[2] = 0x00; // Placeholder high byte
@@ -1325,7 +1525,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
         }
         else
         {
-            // Pass 2: use near conditional jump if needed
+            // Pass 2+: Use conservative estimate (near conditional jump) when target unknown
             uint8_t near_opcode = get_near_condition_opcode(def->opcode);
             if (near_opcode != 0)
             {
@@ -1344,6 +1544,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             }
         }
     }
+    return true;
     return true;
 }
 
@@ -1460,7 +1661,7 @@ static bool encode_inc_dec(const instruction_t *instr, uint8_t *buffer, size_t *
         else
         {
             // Single register-based addressing [reg], [reg+disp]
-            uint8_t base_code = register_to_rm16(instr->operands[0].value.memory.base);
+            uint8_t base_code = register_to_rm(instr->operands[0].value.memory.base, asm_ctx->mode);
 
             if (instr->operands[0].value.memory.displacement == 0 && instr->operands[0].value.memory.base != REG_BP)
             {
@@ -1809,6 +2010,109 @@ static bool encode_test_reg_imm(const instruction_t *instr, uint8_t *buffer, siz
     return true;
 }
 
+static bool encode_two_byte_mem(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
+{
+    if (instr->operand_count != 1 || instr->operands[0].type != OPERAND_MEMORY)
+    {
+        return false;
+    }
+
+    const instruction_def_t *def = find_instruction(instr->mnemonic);
+    if (!def)
+        return false;
+
+    // For LGDT: 0x0F 0x01 /2 m16&32
+    buffer[0] = 0x0F;        // Two-byte instruction prefix
+    buffer[1] = def->opcode; // Second byte (0x01 for LGDT)
+
+    register_t base_reg = instr->operands[0].value.memory.base;
+    register_t index_reg = instr->operands[0].value.memory.index;
+    int32_t displacement = instr->operands[0].value.memory.displacement;
+    uint8_t modrm_reg = def->modrm_reg; // reg field from instruction definition (2 for LGDT)
+
+    size_t bytes_used = 2; // Start after 0x0F and opcode
+
+    // Handle different memory addressing modes
+    if (instr->operands[0].value.memory.has_label)
+    {
+        // Direct memory addressing [label]: mod=00, r/m=6
+        buffer[2] = make_modrm(0, modrm_reg, 6);
+
+        // Lookup symbol address during pass 2
+        symbol_t *sym = symbol_lookup(asm_ctx, instr->operands[0].value.memory.label);
+        uint16_t addr = sym && sym->defined ? sym->address : 0;
+
+        buffer[3] = (uint8_t)(addr & 0xFF);        // Address low byte
+        buffer[4] = (uint8_t)((addr >> 8) & 0xFF); // Address high byte
+        bytes_used = 5;
+    }
+    else if (base_reg == REG_NONE)
+    {
+        // Direct memory addressing [immediate]: mod=00, r/m=6
+        buffer[2] = make_modrm(0, modrm_reg, 6);
+        buffer[3] = (uint8_t)(displacement & 0xFF);
+        buffer[4] = (uint8_t)((displacement >> 8) & 0xFF);
+        bytes_used = 5;
+    }
+    else if (index_reg != REG_NONE)
+    {
+        // Base+index addressing [base+index], [base+index+disp]
+        uint8_t rm_code = get_base_index_rm(base_reg, index_reg);
+
+        if (displacement == 0 && base_reg != REG_BP)
+        {
+            // [base+index] - mod=00
+            buffer[2] = make_modrm(0, modrm_reg, rm_code);
+            bytes_used = 3;
+        }
+        else if (displacement >= -128 && displacement <= 127)
+        {
+            // [base+index+disp8] - mod=01
+            buffer[2] = make_modrm(1, modrm_reg, rm_code);
+            buffer[3] = (uint8_t)displacement;
+            bytes_used = 4;
+        }
+        else
+        {
+            // [base+index+disp16] - mod=10
+            buffer[2] = make_modrm(2, modrm_reg, rm_code);
+            buffer[3] = (uint8_t)(displacement & 0xFF);
+            buffer[4] = (uint8_t)((displacement >> 8) & 0xFF);
+            bytes_used = 5;
+        }
+    }
+    else
+    {
+        // Single base register addressing [reg], [reg+disp]
+        uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode);
+
+        if (displacement == 0 && base_reg != REG_BP)
+        {
+            // [reg] - mod=00
+            buffer[2] = make_modrm(0, modrm_reg, base_code);
+            bytes_used = 3;
+        }
+        else if (displacement >= -128 && displacement <= 127)
+        {
+            // [reg+disp8] - mod=01
+            buffer[2] = make_modrm(1, modrm_reg, base_code);
+            buffer[3] = (uint8_t)displacement;
+            bytes_used = 4;
+        }
+        else
+        {
+            // [reg+disp16] - mod=10
+            buffer[2] = make_modrm(2, modrm_reg, base_code);
+            buffer[3] = (uint8_t)(displacement & 0xFF);
+            buffer[4] = (uint8_t)((displacement >> 8) & 0xFF);
+            bytes_used = 5;
+        }
+    }
+
+    *size = bytes_used;
+    return true;
+}
+
 // Helper function to get segment override prefix
 static uint8_t get_segment_override_prefix(register_t segment)
 {
@@ -1960,7 +2264,7 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             else if (instr->operands[0].type == OPERAND_REGISTER &&
                      instr->operands[1].type == OPERAND_IMMEDIATE)
             {
-                result = encode_mov_reg_imm(instr, temp_buffer, &temp_size);
+                result = encode_mov_reg_imm(instr, temp_buffer, &temp_size, asm_ctx);
             }
             else if (instr->operands[0].type == OPERAND_REGISTER &&
                      instr->operands[1].type == OPERAND_LABEL)
@@ -1970,17 +2274,17 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                 instruction_t temp_instr = *instr;
                 temp_instr.operands[1].type = OPERAND_IMMEDIATE;
                 temp_instr.operands[1].value.immediate = 0; // Placeholder value for size calculation
-                result = encode_mov_reg_imm(&temp_instr, temp_buffer, &temp_size);
+                result = encode_mov_reg_imm(&temp_instr, temp_buffer, &temp_size, asm_ctx);
             }
             else if (instr->operands[0].type == OPERAND_REGISTER &&
                      instr->operands[1].type == OPERAND_MEMORY)
             {
-                result = encode_mov_reg_mem(instr, temp_buffer, &temp_size);
+                result = encode_mov_reg_mem(instr, temp_buffer, &temp_size, asm_ctx);
             }
             else if (instr->operands[0].type == OPERAND_MEMORY &&
                      instr->operands[1].type == OPERAND_REGISTER)
             {
-                result = encode_mov_mem_reg(instr, temp_buffer, &temp_size);
+                result = encode_mov_mem_reg(instr, temp_buffer, &temp_size, asm_ctx);
             }
             else if (instr->operands[0].type == OPERAND_MEMORY &&
                      instr->operands[1].type == OPERAND_IMMEDIATE)
@@ -2042,7 +2346,7 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                 const instruction_def_t *def = find_instruction(instr->mnemonic);
                 if (def && def->encoding == ENC_REG_REG)
                 {
-                    result = encode_reg_reg_generic(instr, temp_buffer, &temp_size, def);
+                    result = encode_reg_reg_generic(instr, temp_buffer, &temp_size, def, asm_ctx);
                 }
             }
             else if (instr->operands[0].type == OPERAND_REGISTER &&
@@ -2054,16 +2358,15 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                     result = encode_test_reg_imm(instr, temp_buffer, &temp_size);
                 }
                 else
-                {
-                    // Use register-immediate encoding for other arithmetic instructions
-                    result = encode_arith_reg_imm(instr, temp_buffer, &temp_size);
+                { // Use register-immediate encoding for other arithmetic instructions
+                    result = encode_arith_reg_imm(instr, temp_buffer, &temp_size, asm_ctx);
                 }
             }
             else if (instr->operands[0].type == OPERAND_MEMORY &&
                      instr->operands[1].type == OPERAND_REGISTER)
             {
                 // Memory-register combination
-                result = encode_arith_mem_reg(instr, temp_buffer, &temp_size);
+                result = encode_arith_mem_reg(instr, temp_buffer, &temp_size, asm_ctx);
             }
             else if (instr->operands[0].type == OPERAND_MEMORY &&
                      instr->operands[1].type == OPERAND_IMMEDIATE)
@@ -2102,35 +2405,53 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
     case ENC_POP_REG:
         result = encode_pop_reg(instr, temp_buffer, &temp_size);
         break;
-
     case ENC_REG_REG:
         // Handle other register-register instructions (non-arithmetic)
-        result = encode_reg_reg_generic(instr, temp_buffer, &temp_size, def);
+        result = encode_reg_reg_generic(instr, temp_buffer, &temp_size, def, asm_ctx);
         break;
 
     case ENC_REG_IMM:
         // Handle register-immediate instructions (non-arithmetic handled explicitly above)
         if (strcasecmp(instr->mnemonic, "mov") == 0)
         {
-            result = encode_mov_reg_imm(instr, temp_buffer, &temp_size);
+            result = encode_mov_reg_imm(instr, temp_buffer, &temp_size, asm_ctx);
         }
         break;
 
     case ENC_INT_IMM:
         result = encode_int_imm(instr, temp_buffer, &temp_size);
         break;
-
     case ENC_JMP_REL:
     case ENC_CALL_REL:
-        if (asm_ctx->verbose)
+        // Special-case: jmp/call to '$' (current address)
+        if (instr->operand_count == 1 && instr->operands[0].type == OPERAND_LABEL &&
+            strcmp(instr->operands[0].value.label, "$") == 0)
         {
-            printf("DEBUG: Calling encode_jmp_rel for %s\n", instr->mnemonic);
+            // Emit short jump/call to current instruction address (2-byte instruction, so displacement = -2)
+            temp_buffer[0] = def->opcode;
+            temp_buffer[1] = (uint8_t)0xFE; // -2 in two's complement
+            temp_size = 2;
+            result = true;
+            if (asm_ctx->verbose)
+            {
+                printf("DEBUG: Special case handling for %s $ - emitting 2-byte instruction with -2 displacement\n", instr->mnemonic);
+            }
         }
-        result = encode_jmp_rel(instr, temp_buffer, &temp_size, asm_ctx);
+        else
+        {
+            if (asm_ctx->verbose)
+            {
+                printf("DEBUG: Calling encode_jmp_rel for %s\n", instr->mnemonic);
+            }
+            result = encode_jmp_rel(instr, temp_buffer, &temp_size, asm_ctx);
+        }
         break;
-
     case ENC_REP_STRING:
         result = encode_rep_string(instr, temp_buffer, &temp_size);
+        break;
+
+    case ENC_TWO_BYTE_MEM:
+        result = encode_two_byte_mem(instr, temp_buffer, &temp_size, asm_ctx);
         break;
 
     case ENC_SPECIAL:
@@ -2228,7 +2549,10 @@ static bool encode_arith_mem_imm(const instruction_t *instr, uint8_t *buffer, si
     }
     else if (strcasecmp(instr->mnemonic, "sbb") == 0)
     {
-        modrm_reg = 3; // SBB    } else if (strcasecmp(instr->mnemonic, "and") == 0) {
+        modrm_reg = 3; // SBB
+    }
+    else if (strcasecmp(instr->mnemonic, "and") == 0)
+    {
         modrm_reg = 4; // AND
     }
     else if (strcasecmp(instr->mnemonic, "sub") == 0)
@@ -2347,11 +2671,11 @@ static bool encode_arith_mem_imm(const instruction_t *instr, uint8_t *buffer, si
     else
     {
         // Single base register addressing
-        uint8_t base_code = register_to_rm16(base_reg);
+        uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode);
 
         if (displacement == 0 && base_reg != REG_BP)
         {
-            // [reg] - mod=00
+            // [reg] - mod=00 (except BP which always needs displacement)
             buffer[1] = make_modrm(0, modrm_reg, base_code);
             bytes_used = 2;
         }
@@ -2389,7 +2713,6 @@ static bool encode_arith_mem_imm(const instruction_t *instr, uint8_t *buffer, si
         buffer[bytes_used + 1] = (uint8_t)((value >> 8) & 0xFF);
         *size = bytes_used + 2;
     }
-
     return true;
 }
 
@@ -2482,7 +2805,7 @@ static bool encode_mov_mem_imm(const instruction_t *instr, uint8_t *buffer, size
     else
     {
         // Single base register addressing
-        uint8_t base_code = register_to_rm16(base_reg);
+        uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode);
 
         if (displacement == 0 && base_reg != REG_BP)
         {

@@ -20,9 +20,20 @@ void symbol_table_destroy(symbol_t *symbols);
 void symbol_table_dump(assembler_t *asm_ctx);
 bool symbol_check_undefined(assembler_t *asm_ctx);
 
+// Section management functions
+section_t *section_create(const char *name, section_type_t type);
+bool section_add(assembler_t *asm_ctx, section_t *section);
+section_t *section_find(assembler_t *asm_ctx, const char *name);
+bool section_switch(assembler_t *asm_ctx, const char *name);
+void section_table_destroy(section_t *sections);
+section_t *section_get_current(assembler_t *asm_ctx);
+void section_calculate_addresses(assembler_t *asm_ctx);
+size_t section_get_total_size(assembler_t *asm_ctx);
+
 // Output functions
 bool output_write_binary(assembler_t *asm_ctx);
 bool output_write_hex(assembler_t *asm_ctx);
+bool output_write_elf(assembler_t *asm_ctx);
 
 // Error handling
 void assembler_error(assembler_t *asm_ctx, const char *format, ...);

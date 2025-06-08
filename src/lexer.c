@@ -53,6 +53,24 @@ register_t parse_register(const char *str)
         return REG_ES;
     if (strcasecmp(str, "ss") == 0)
         return REG_SS;
+    // 32-bit registers
+    if (strcasecmp(str, "eax") == 0)
+        return REG_EAX;
+    if (strcasecmp(str, "ebx") == 0)
+        return REG_EBX;
+    if (strcasecmp(str, "ecx") == 0)
+        return REG_ECX;
+    if (strcasecmp(str, "edx") == 0)
+        return REG_EDX;
+    if (strcasecmp(str, "esi") == 0)
+        return REG_ESI;
+    if (strcasecmp(str, "edi") == 0)
+        return REG_EDI;
+    if (strcasecmp(str, "ebp") == 0)
+        return REG_EBP;
+    if (strcasecmp(str, "esp") == 0)
+        return REG_ESP;
+    // 8-bit registers
     if (strcasecmp(str, "al") == 0)
         return REG_AL;
     if (strcasecmp(str, "ah") == 0)
@@ -100,6 +118,24 @@ const char *register_to_string(register_t reg)
         return "es";
     case REG_SS:
         return "ss";
+    // 32-bit registers
+    case REG_EAX:
+        return "eax";
+    case REG_EBX:
+        return "ebx";
+    case REG_ECX:
+        return "ecx";
+    case REG_EDX:
+        return "edx";
+    case REG_ESI:
+        return "esi";
+    case REG_EDI:
+        return "edi";
+    case REG_EBP:
+        return "ebp";
+    case REG_ESP:
+        return "esp";
+    // 8-bit registers
     case REG_AL:
         return "al";
     case REG_AH:
@@ -211,6 +247,14 @@ static token_t lexer_read_string(lexer_t *lexer)
     token.column = lexer->column;
 
     size_t start = lexer->position;
+    
+    // Handle dot-prefixed identifiers like .text, .data, .bss
+    if (lexer->position < lexer->length && lexer->input[lexer->position] == '.')
+    {
+        lexer->position++;
+        lexer->column++;
+    }
+    
     while (lexer->position < lexer->length && is_alnum(lexer->input[lexer->position]))
     {
         lexer->position++;
@@ -270,9 +314,8 @@ static token_t lexer_read_string(lexer_t *lexer)
             "clc", "stc", "cmc", "cld", "std", "cli", "sti",
             "lahf", "sahf", "pushf", "popf",
             // Stack operations
-            "pusha", "popa",
-            // System instructions
-            "int", "int3", "into", "iret", "hlt", "wait", "lock", "nop",
+            "pusha", "popa",            // System instructions
+            "int", "int3", "into", "iret", "hlt", "wait", "lock", "nop", "lgdt",
             // BCD operations
             "daa", "das", "aaa", "aas", "aam", "aad",
             // I/O operations
@@ -360,6 +403,59 @@ static token_t lexer_read_character(lexer_t *lexer)
             lexer->position++;
             lexer->column++;
         }
+    }    return token;
+}
+
+static token_t lexer_read_string_literal(lexer_t *lexer)
+{
+    token_t token = {0};
+    token.type = TOKEN_STRING;
+    token.line = lexer->line;
+    token.column = lexer->column;
+
+    lexer->position++; // Skip opening quote
+    lexer->column++;
+
+    size_t start = lexer->position;
+    size_t value_idx = 0;
+
+    while (lexer->position < lexer->length && 
+           lexer->input[lexer->position] != '"' && 
+           value_idx < MAX_OPERAND_LENGTH - 1)
+    {
+        char c = lexer->input[lexer->position];
+        
+        // Handle escape sequences
+        if (c == '\\' && lexer->position + 1 < lexer->length)
+        {
+            lexer->position++; // Skip backslash
+            lexer->column++;
+            
+            char next = lexer->input[lexer->position];
+            switch (next)
+            {
+                case 'n': c = '\n'; break;
+                case 'r': c = '\r'; break;
+                case 't': c = '\t'; break;
+                case '\\': c = '\\'; break;
+                case '"': c = '"'; break;
+                case '0': c = '\0'; break;
+                default: c = next; break; // For any other character, use as-is
+            }
+        }
+        
+        token.value[value_idx++] = c;
+        lexer->position++;
+        lexer->column++;
+    }
+
+    token.value[value_idx] = '\0';
+
+    // Skip closing quote if present
+    if (lexer->position < lexer->length && lexer->input[lexer->position] == '"')
+    {
+        lexer->position++;
+        lexer->column++;
     }
 
     return token;
@@ -520,10 +616,26 @@ token_t lexer_next_token(lexer_t *lexer)
         strncpy(token.value, &lexer->input[start], length);
         token.value[length] = '\0';
         lexer->column += length;
-        break;
+        break;    case '\'':
+        return lexer_read_character(lexer);    case '"':
+        return lexer_read_string_literal(lexer);
 
-    case '\'':
-        return lexer_read_character(lexer);
+    case '.':
+        // Handle dot-prefixed identifiers like .text, .data, .bss
+        if (lexer->position + 1 < lexer->length && is_alpha(lexer->input[lexer->position + 1]))
+        {
+            return lexer_read_string(lexer);
+        }
+        else
+        {
+            // Just a standalone dot
+            token.type = TOKEN_UNKNOWN;
+            token.value[0] = current;
+            token.value[1] = '\0';
+            lexer->position++;
+            lexer->column++;
+        }
+        break;
 
     default:
         if (is_alpha(current))

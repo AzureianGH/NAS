@@ -52,6 +52,7 @@ typedef enum
     TOKEN_BYTE,
     TOKEN_WORD,
     TOKEN_DWORD,
+    TOKEN_STRING,
     TOKEN_NEWLINE,
     TOKEN_EOF
 } token_type_t;
@@ -73,6 +74,15 @@ typedef enum
     REG_DS,
     REG_ES,
     REG_SS,
+    // 32-bit registers
+    REG_EAX,
+    REG_EBX,
+    REG_ECX,
+    REG_EDX,
+    REG_ESI,
+    REG_EDI,
+    REG_EBP,
+    REG_ESP,
     // 8-bit registers
     REG_AL,
     REG_AH,
@@ -141,12 +151,33 @@ typedef struct
     int line;
 } instruction_t;
 
+// Section types for ELF
+typedef enum
+{
+    SECTION_TEXT,    // .text - executable code
+    SECTION_DATA,    // .data - initialized data  
+    SECTION_BSS      // .bss - uninitialized data
+} section_type_t;
+
+// Section information
+typedef struct section
+{
+    section_type_t type;
+    char name[MAX_LABEL_LENGTH];
+    uint32_t address;
+    uint32_t size;
+    uint8_t *data;
+    size_t data_capacity;
+    struct section *next;
+} section_t;
+
 // Symbol table entry
 typedef struct symbol
 {
     char name[MAX_LABEL_LENGTH];
     uint32_t address;
     bool defined;
+    section_type_t section; // Which section this symbol belongs to
     struct symbol *next;
 } symbol_t;
 
@@ -163,14 +194,19 @@ typedef struct
     bool directive_mode_set; // Whether #width directive was used
     output_format_t format;
     uint32_t origin;
-    uint32_t current_address;
+    uint32_t current_address;    
     symbol_t *symbols;
     uint8_t *code_buffer;
     size_t code_size;
     size_t code_capacity;
     bool verbose;
     bool error_occurred;
-    int pass; // Current assembler pass (1 or 2)
+    int pass; // Current assembler pass
+    bool sizes_changed; // Track if instruction sizes changed during pass
+    // Section support
+    section_t *sections;
+    section_type_t current_section;
+    section_t *current_section_ptr;
 } assembler_t;
 
 // Forward declarations
