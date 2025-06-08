@@ -148,6 +148,33 @@ void symbol_table_destroy(symbol_t* symbols) {
     }
 }
 
+bool symbol_check_undefined(assembler_t* asm_ctx) {
+    symbol_t* current = asm_ctx->symbols;
+    bool has_undefined = false;
+    
+    while (current) {
+        if (!current->defined) {
+            assembler_error(asm_ctx, "Undefined symbol: '%s'", current->name);
+            has_undefined = true;
+        }
+        current = current->next;
+    }
+    
+    if (has_undefined) {
+        // List all symbols in the symbol table for debugging
+        fprintf(stderr, "\nSymbol table contents:\n");
+        current = asm_ctx->symbols;
+        while (current) {
+            fprintf(stderr, "  %s -> 0x%04X (defined=%s)\n", 
+                   current->name, current->address, current->defined ? "yes" : "no");
+            current = current->next;
+        }
+        fprintf(stderr, "\n");
+    }
+    
+    return !has_undefined; // Return true if no undefined symbols found
+}
+
 // Output functions
 bool output_write_binary(assembler_t* asm_ctx) {
     if (!asm_ctx->output) return false;
@@ -313,6 +340,12 @@ static bool assembler_pass(assembler_t* asm_ctx, const char* input_content, int 
     
     // Pass 2: Generate actual machine code with correct addresses
     if (!assembler_pass(asm_ctx, input_content, 2)) {
+        success = false;
+        goto cleanup;
+    }
+    
+    // Check for undefined symbols and report errors
+    if (!symbol_check_undefined(asm_ctx)) {
         success = false;
         goto cleanup;
     }

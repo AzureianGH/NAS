@@ -80,13 +80,13 @@ operand_t parser_parse_memory(parser_t* parser) {
                 parser_advance(parser); // consume colon
             }
         }
-    }
-
-    // Handle label-based memory operand [label] or [segment:label]
+    }    // Handle label-based memory operand [label] or [segment:label]
     if (parser->current_token.type == TOKEN_LABEL) {
         operand.value.memory.has_label = true;
         strncpy(operand.value.memory.label, parser->current_token.value, MAX_LABEL_LENGTH - 1);
         operand.value.memory.label[MAX_LABEL_LENGTH - 1] = '\0';
+        // Register this symbol as being referenced (undefined for now)
+        symbol_reference(parser->assembler, parser->current_token.value);
         // Advance past label
         parser_advance(parser);
         // Expect closing bracket
@@ -227,8 +227,7 @@ operand_t parser_parse_operand(parser_t* parser) {
                 operand.size = explicit_size;
             }
             break;
-            
-        case TOKEN_LABEL:
+              case TOKEN_LABEL:
             // Check if this is a defined symbol (like from #define)
             symbol_t* symbol = symbol_lookup(parser->assembler, parser->current_token.value);
             if (symbol && symbol->defined) {
@@ -238,6 +237,8 @@ operand_t parser_parse_operand(parser_t* parser) {
                 operand.size = explicit_size ? explicit_size : 16; // Default to 16-bit
             } else {
                 // Keep as label operand for later resolution
+                // Register this symbol as being referenced (undefined for now)
+                symbol_reference(parser->assembler, parser->current_token.value);
                 operand.type = OPERAND_LABEL;
                 strncpy(operand.value.label, parser->current_token.value, MAX_LABEL_LENGTH - 1);
                 operand.value.label[MAX_LABEL_LENGTH - 1] = '\0';

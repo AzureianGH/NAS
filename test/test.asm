@@ -1,35 +1,156 @@
-#width 16
-#origin 0x7C00
+#origin 0x0000
 
-_kernel_tick: 
-    #dw 0x0000
+_getString:
+    push bp
+    mov bp, sp
 
-start:
-    ; Test basic 16-bit instructions that should work
-    mov ax, bx
-    add ax, 1000
-    
-    ; Test problematic instructions mentioned by user
-    cmp word [cs:_kernel_tick], 1000
-    
-    ; More advanced 16-bit features
-    mov word [ds:0x1000], 0x5678
-    add word [es:si+4], 100
-    sub byte [ss:bp-2], 50
-    
-    ; Test various segment overrides
-    mov al, [cs:0x100]
-    mov [ds:bx], al
-    mov word [es:di+2], 0x1234
-    
-    ; Test memory addressing modes
-    mov ax, [bx+si]
-    mov [bp+di+8], cx
-    add word [bx], 500
-    
-    ; Test more complex operations
-    cmp word [ds:0x2000], 0x8000
-    test byte [cs:start], 0xFF
-    inc word [ds:bx+si+10]
-    
-    hlt
+    ; Array variable without initializers: buffer[256]
+    ; Setting up pointer to array buffer[256]
+    mov ax, _kernel_getString_buffer_0 ; Address of array
+    push ax ; Store pointer to array
+    ; Local variable declaration: ptr
+    mov ax, [bp-2] ; Load local variable buffer
+    push ax ; Initialize local variable
+    ; Local variable declaration: c
+    push 0 ; Uninitialized local variable
+    ; While loop
+while_cond3:
+    mov ax, 1 ; Load boolean value (true)
+    test ax, ax
+    jz while_end5
+while_body4:
+    ; Loop body
+    ; Assignment statement
+    ; Function call to getCharLetter
+    call _getCharLetter
+    mov [bp-6], ax ; Store in local variable c
+    ; If statement
+    mov ax, [bp-6] ; Load local variable c
+    push ax ; Save left operand
+    mov ax, 13 ; Load literal
+    mov bx, ax ; Right operand to bx
+    pop ax ; Restore left operand
+    cmp ax, bx ; Equal comparison
+    mov ax, 0  ; Assume false
+    je eq_true_8
+    jmp eq_end_8
+eq_true_8:
+    mov ax, 1  ; Set true
+eq_end_8:
+    test ax, ax
+    jz if_else6
+    ; If true branch
+    ; Assignment statement
+    mov ax, 0 ; Load literal
+    push ax ; Save right-hand side value
+    mov ax, [bp-4] ; Load local variable ptr
+    mov bx, ax ; Move pointer address to BX
+    pop ax ; Restore right-hand side value
+    mov [bx], al ; Store byte value through pointer
+    ; Break statement
+    jmp while_end5 ; Jump to end of loop
+    jmp if_end7
+if_else6:
+    ; Else branch
+    ; If statement
+    mov ax, [bp-6] ; Load local variable c
+    push ax ; Save left operand
+    mov ax, 98 ; Load literal
+    mov bx, ax ; Right operand to bx
+    pop ax ; Restore left operand
+    cmp ax, bx ; Equal comparison
+    mov ax, 0  ; Assume false
+    je eq_true_11
+    jmp eq_end_11
+eq_true_11:
+    mov ax, 1  ; Set true
+eq_end_11:
+    test ax, ax
+    jz if_else9
+    ; If true branch
+    ; If statement
+    mov ax, [bp-4] ; Load local variable ptr
+    push ax ; Save left operand
+    mov ax, [bp-2] ; Load local variable buffer
+    mov bx, ax ; Right operand to bx
+    pop ax ; Restore left operand
+    cmp ax, bx ; Greater than comparison
+    mov ax, 0  ; Assume false
+    jg gt_true_14
+    jmp gt_end_14
+gt_true_14:
+    mov ax, 1  ; Set true
+gt_end_14:
+    test ax, ax
+    jz if_end13
+    ; If true branch
+    ; Postfix decrement of variable ptr
+    mov ax, [bp-4] ; Load variable value
+    mov bx, ax ; Save original value to BX
+    dec bx ; Decrement value
+    mov [bp-4], bx ; Store decremented value back
+    ; Function call to writeChar
+    mov ax, 98 ; Load literal
+    push ax ; Argument 1
+    call _writeChar
+    add sp, 2 ; Remove arguments
+    ; Function call to writeChar
+    mov ax, 32 ; Load literal
+    push ax ; Argument 1
+    call _writeChar
+    add sp, 2 ; Remove arguments
+    ; Function call to writeChar
+    mov ax, 98 ; Load literal
+    push ax ; Argument 1
+    call _writeChar
+    add sp, 2 ; Remove arguments
+if_end13:
+    jmp if_end10
+if_else9:
+    ; Else branch
+    ; Assignment statement
+    mov ax, [bp-6] ; Load local variable c
+    push ax ; Save right-hand side value
+    ; Postfix increment of variable ptr
+    mov ax, [bp-4] ; Load variable value
+    mov bx, ax ; Save original value to BX
+    inc bx ; Increment value
+    mov [bp-4], bx ; Store incremented value back
+    mov bx, ax ; Move pointer address to BX
+    pop ax ; Restore right-hand side value
+    mov [bx], ax ; Store word value through pointer
+    ; Function call to writeChar
+    mov ax, [bp-6] ; Load local variable c
+    push ax ; Argument 1
+    call _writeChar
+    add sp, 2 ; Remove arguments
+if_end10:
+if_end7:
+    jmp while_cond3
+while_end5:
+    ; Return statement
+    mov ax, [bp-2] ; Load local variable buffer
+    ; Return value in AX
+    jmp _getString_exit
+
+_getString_exit:
+    ; Standard function epilogue
+    mov sp, bp
+    pop bp
+    ret
+
+_getCharLetter:
+    ; Simulated function to get a character input
+    ; For testing purposes, we will just return a fixed value
+    mov ax, 98 ; Simulate getting character 'b'
+    ret
+
+_writeChar:
+    ; Simulated function to write a character output
+    ; For testing purposes, we will just return
+    ret
+
+_kernel_getString_buffer_0:
+    ; Simulated buffer for _getString
+    ; This would normally be allocated in the kernel or a specific memory area
+    #times 256 #db 0 ; Allocate 256 bytes initialized to 0

@@ -202,6 +202,52 @@ static const instruction_def_t instruction_table[] = {
 static bool encode_arith_mem_imm(const instruction_t* instr, uint8_t* buffer, size_t* size, assembler_t* asm_ctx);
 static bool encode_mov_mem_imm(const instruction_t* instr, uint8_t* buffer, size_t* size, assembler_t* asm_ctx);
 
+// Function to get the opposite condition opcode for conditional jumps
+static uint8_t get_opposite_condition_opcode(uint8_t opcode) {
+    switch (opcode) {
+        case 0x70: return 0x71; // JO -> JNO
+        case 0x71: return 0x70; // JNO -> JO
+        case 0x72: return 0x73; // JB/JC -> JNB/JNC
+        case 0x73: return 0x72; // JNB/JNC -> JB/JC
+        case 0x74: return 0x75; // JE/JZ -> JNE/JNZ
+        case 0x75: return 0x74; // JNE/JNZ -> JE/JZ
+        case 0x76: return 0x77; // JBE/JNA -> JA/JNBE
+        case 0x77: return 0x76; // JA/JNBE -> JBE/JNA
+        case 0x78: return 0x79; // JS -> JNS
+        case 0x79: return 0x78; // JNS -> JS
+        case 0x7A: return 0x7B; // JP/JPE -> JNP/JPO
+        case 0x7B: return 0x7A; // JNP/JPO -> JP/JPE
+        case 0x7C: return 0x7D; // JL/JNGE -> JNL/JGE
+        case 0x7D: return 0x7C; // JNL/JGE -> JL/JNGE
+        case 0x7E: return 0x7F; // JLE/JNG -> JG/JNLE
+        case 0x7F: return 0x7E; // JG/JNLE -> JLE/JNG
+        default: return 0; // Unknown or not a conditional jump
+    }
+}
+
+// Function to get the near conditional jump opcode (0F 8x) for conditional jumps
+static uint8_t get_near_condition_opcode(uint8_t opcode) {
+    switch (opcode) {
+        case 0x70: return 0x80; // JO -> 0F 80
+        case 0x71: return 0x81; // JNO -> 0F 81
+        case 0x72: return 0x82; // JB/JC -> 0F 82
+        case 0x73: return 0x83; // JNB/JNC -> 0F 83
+        case 0x74: return 0x84; // JE/JZ -> 0F 84
+        case 0x75: return 0x85; // JNE/JNZ -> 0F 85
+        case 0x76: return 0x86; // JBE/JNA -> 0F 86
+        case 0x77: return 0x87; // JA/JNBE -> 0F 87
+        case 0x78: return 0x88; // JS -> 0F 88
+        case 0x79: return 0x89; // JNS -> 0F 89
+        case 0x7A: return 0x8A; // JP/JPE -> 0F 8A
+        case 0x7B: return 0x8B; // JNP/JPO -> 0F 8B
+        case 0x7C: return 0x8C; // JL/JNGE -> 0F 8C
+        case 0x7D: return 0x8D; // JNL/JGE -> 0F 8D
+        case 0x7E: return 0x8E; // JLE/JNG -> 0F 8E
+        case 0x7F: return 0x8F; // JG/JNLE -> 0F 8F
+        default: return 0; // Unknown or not a conditional jump
+    }
+}
+
 const instruction_def_t* find_instruction(const char* mnemonic) {
     for (int i = 0; instruction_table[i].encoding != ENC_NONE; i++) {
         if (strcasecmp(instruction_table[i].mnemonic, mnemonic) == 0) {
@@ -835,11 +881,14 @@ static bool encode_jmp_rel(const instruction_t* instr, uint8_t* buffer, size_t* 
         if (target_available) {
             // Calculate relative displacement
             uint32_t current_addr = codegen_get_current_address(asm_ctx);
-            
-            if (def->opcode == 0xE8) {
-                // CALL rel16 - 3 bytes in 16-bit mode (opcode + 16-bit displacement)
+              if (def->opcode == 0xE8) {                // CALL rel16 - 3 bytes in 16-bit mode (opcode + 16-bit displacement)
                 uint32_t instruction_size = 3;
-                int32_t displacement = (int32_t)(target_addr - (current_addr + instruction_size));
+                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);
+                
+                // Handle the case where target equals current address (call to next instruction)
+                if (target_addr == current_addr) {
+                    displacement = 0;  // Call to next instruction (unusual but valid)
+                }
                 
                 if (asm_ctx->verbose) {
                     printf("DEBUG: CALL displacement calculation: target=0x%04X, current=0x%04X, size=%d, displacement=%d\n", 
@@ -849,56 +898,162 @@ static bool encode_jmp_rel(const instruction_t* instr, uint8_t* buffer, size_t* 
                 buffer[0] = def->opcode;
                 buffer[1] = (uint8_t)(displacement & 0xFF);
                 buffer[2] = (uint8_t)((displacement >> 8) & 0xFF);
-                *size = 3;
-            } else {
-                // Short jump/conditional jump - 2 bytes
+                *size = 3;            } else {                // Short jump/conditional jump - 2 bytes
                 uint32_t instruction_size = 2;
-                int32_t displacement = (int32_t)(target_addr - (current_addr + instruction_size));
+                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);
+                
+                // Handle the case where target equals current address (jump to next instruction)
+                if (target_addr == current_addr) {
+                    displacement = 0;  // No jump needed, fall through to next instruction
+                }
                 
                 if (asm_ctx->verbose) {
                     printf("DEBUG: JMP displacement calculation: target=0x%04X, current=0x%04X, size=%d, displacement=%d\n", 
                            target_addr, current_addr, instruction_size, displacement);
+                }if (displacement < -128 || displacement > 127) {
+                    // Displacement too large for short jump
+                    if (strcasecmp(instr->mnemonic, "jmp") == 0) {
+                        // For unconditional jumps, use near jump (0xE9) with 16-bit displacement
+                        buffer[0] = 0xE9; // Near JMP opcode                        // Calculate displacement for near jump (3 bytes total)
+                        uint32_t near_instruction_size = 3;
+                        int32_t near_displacement = (int32_t)(target_addr - current_addr - near_instruction_size);
+                        
+                        // Handle the case where target equals current address (jump to next instruction)
+                        if (target_addr == current_addr) {
+                            near_displacement = 0;  // No jump needed, fall through to next instruction
+                        }
+                        buffer[1] = (uint8_t)(near_displacement & 0xFF);
+                        buffer[2] = (uint8_t)((near_displacement >> 8) & 0xFF);
+                        *size = 3;
+                        
+                        if (asm_ctx->verbose) {
+                            printf("DEBUG: Long unconditional jump converted to near jump (size=3, displacement=%d)\n", near_displacement);
+                        }
+                    } else {
+                        // For conditional jumps, use near conditional jump (0F 8x opcodes)
+                        uint8_t near_opcode = get_near_condition_opcode(def->opcode);
+                        if (near_opcode == 0) {
+                            if (asm_ctx->verbose) {
+                                printf("ERROR: Cannot find near condition for opcode 0x%02X\n", def->opcode);
+                            }
+                            return false;
+                        }
+                        
+                        // Use 0F 8x near conditional jump (4 bytes total)
+                        buffer[0] = 0x0F; // Two-byte opcode prefix
+                        buffer[1] = near_opcode; // Near conditional jump opcode                          // Calculate displacement for near conditional jump (4 bytes total)
+                        uint32_t near_instruction_size = 4;
+                        int32_t near_displacement = (int32_t)(target_addr - current_addr - near_instruction_size);
+                        
+                        // Handle the case where target equals current address (jump to next instruction)
+                        if (target_addr == current_addr) {
+                            near_displacement = 0;  // No jump needed, fall through to next instruction
+                        }
+                        buffer[2] = (uint8_t)(near_displacement & 0xFF);
+                        buffer[3] = (uint8_t)((near_displacement >> 8) & 0xFF);
+                        *size = 4;
+                        
+                        if (asm_ctx->verbose) {
+                            printf("DEBUG: Long conditional jump converted to near conditional jump (0F %02X, size=4, displacement=%d)\n", near_opcode, near_displacement);
+                        }
+                    }
+                } else {
+                    buffer[0] = def->opcode;
+                    buffer[1] = (uint8_t)displacement;
+                    *size = 2;
                 }
-                
-                if (displacement < -128 || displacement > 127) {
-                    // Displacement too large for short jump, should use near jump
-                    return false;
-                }
-                buffer[0] = def->opcode;
-                buffer[1] = (uint8_t)displacement;
-                *size = 2;
             }            
-            return true;
-        } else {
-            // Target not available - use placeholder
+            return true;        } else {
+            // Target not available - need to estimate instruction size carefully
+            // To avoid cascading size changes, try to be conservative but consistent
             if (def->opcode == 0xE8) {
-                // CALL instruction - 3 bytes
+                // CALL instruction - always 3 bytes
                 buffer[0] = def->opcode;
                 buffer[1] = 0x00; // Placeholder low byte
                 buffer[2] = 0x00; // Placeholder high byte
                 *size = 3;
+            } else if (strcasecmp(instr->mnemonic, "jmp") == 0) {
+                // For unconditional jumps, start with short jump (2 bytes) in pass 1
+                // The second pass will upgrade to near jump if needed
+                if (asm_ctx->pass == 1) {
+                    buffer[0] = def->opcode; // Short jump opcode (EB)
+                    buffer[1] = 0x00; // Placeholder displacement
+                    *size = 2;
+                } else {
+                    // Pass 2: fallback to near jump if needed (should not reach here normally)
+                    buffer[0] = 0xE9; // Near JMP opcode
+                    buffer[1] = 0x00; // Placeholder low byte
+                    buffer[2] = 0x00; // Placeholder high byte
+                    *size = 3;
+                }
             } else {
-                // Jump instruction - 2 bytes
-                buffer[0] = def->opcode;
-                buffer[1] = 0x00; // Placeholder displacement
-                *size = 2;
+                // For conditional jumps, start with short jump (2 bytes) in pass 1
+                // The second pass will upgrade to near conditional jump if needed
+                if (asm_ctx->pass == 1) {
+                    buffer[0] = def->opcode; // Short conditional jump opcode
+                    buffer[1] = 0x00; // Placeholder displacement
+                    *size = 2;
+                } else {
+                    // Pass 2: fallback to near conditional jump if needed (should not reach here normally)
+                    uint8_t near_opcode = get_near_condition_opcode(def->opcode);
+                    if (near_opcode != 0) {
+                        buffer[0] = 0x0F; // Two-byte opcode prefix
+                        buffer[1] = near_opcode; // Near conditional jump opcode
+                        buffer[2] = 0x00; // Placeholder low byte
+                        buffer[3] = 0x00; // Placeholder high byte
+                        *size = 4;
+                    } else {
+                        // Fallback to short jump for unknown conditions
+                        buffer[0] = def->opcode;
+                        buffer[1] = 0x00; // Placeholder displacement
+                        *size = 2;
+                    }
+                }
             }
             return true;
         }
-    }
-    
-    // Default case with placeholder
+    }    // Default case with placeholder
     if (def->opcode == 0xE8) {
-        // CALL instruction - 3 bytes
+        // CALL instruction - always 3 bytes
         buffer[0] = def->opcode;
         buffer[1] = 0x00; // Placeholder low byte
         buffer[2] = 0x00; // Placeholder high byte
         *size = 3;
+    } else if (strcasecmp(instr->mnemonic, "jmp") == 0) {
+        // For unconditional jumps, start with short jump in pass 1
+        if (asm_ctx->pass == 1) {
+            buffer[0] = def->opcode; // Short jump opcode (EB)
+            buffer[1] = 0x00; // Placeholder displacement
+            *size = 2;
+        } else {
+            // Pass 2: use near jump if needed
+            buffer[0] = 0xE9; // Near JMP opcode
+            buffer[1] = 0x00; // Placeholder low byte
+            buffer[2] = 0x00; // Placeholder high byte
+            *size = 3;
+        }
     } else {
-        // Jump instruction - 2 bytes
-        buffer[0] = def->opcode;
-        buffer[1] = 0x00; // Placeholder displacement
-        *size = 2;
+        // For conditional jumps, start with short jump in pass 1
+        if (asm_ctx->pass == 1) {
+            buffer[0] = def->opcode; // Short conditional jump opcode
+            buffer[1] = 0x00; // Placeholder displacement
+            *size = 2;
+        } else {
+            // Pass 2: use near conditional jump if needed
+            uint8_t near_opcode = get_near_condition_opcode(def->opcode);
+            if (near_opcode != 0) {
+                buffer[0] = 0x0F; // Two-byte opcode prefix
+                buffer[1] = near_opcode; // Near conditional jump opcode
+                buffer[2] = 0x00; // Placeholder low byte
+                buffer[3] = 0x00; // Placeholder high byte
+                *size = 4;
+            } else {
+                // Fallback to short jump for unknown conditions
+                buffer[0] = def->opcode;
+                buffer[1] = 0x00; // Placeholder displacement
+                *size = 2;
+            }
+        }
     }
     return true;
 }

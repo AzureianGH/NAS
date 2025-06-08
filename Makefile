@@ -27,6 +27,6 @@ clean:
 	rm -rf $(OBJ_DIR)/* $(BIN_DIR)/* test/*.bin test/floppy.img
 
 test_asm:
-	bin/nas -m32 -f bin test/test.asm -o test/floppy.img
+	bin/nas -m16 -f bin test/test.asm -o test/floppy.img
 
 .PHONY: all clean test_asm
