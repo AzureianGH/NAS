@@ -112,11 +112,11 @@ void symbol_table_dump(assembler_t *asm_ctx)
     const char *address_color = "\033[1;35m";   // Bright magenta
     const char *reset_color = "\033[0m";        // Reset
 
-    printf("%s╔════════════════════════════════════════════════════════════════╗%s\n", header_color, reset_color);
-    printf("%s║                        SYMBOL TABLE                           ║%s\n", header_color, reset_color);
-    printf("%s╠════╤═══════════════════════╤═══════════╤═══════════════════════╣%s\n", header_color, reset_color);
-    printf("%s║ #  │ Symbol Name           │ Address   │ Status                ║%s\n", header_color, reset_color);
-    printf("%s╠════╪═══════════════════════╪═══════════╪═══════════════════════╣%s\n", header_color, reset_color);
+    printf("%s+================================================================+%s\n", header_color, reset_color);
+    printf("%s|                        SYMBOL TABLE                            |%s\n", header_color, reset_color);
+    printf("%s+====+=======================+============+======================+%s\n", header_color, reset_color);
+    printf("%s| #  | Symbol Name           | Address    | Status               |%s\n", header_color, reset_color);
+    printf("%s+====+=======================+============+======================+%s\n", header_color, reset_color);
 
     symbol_t *current = asm_ctx->symbols;
     int count = 0;
@@ -125,7 +125,7 @@ void symbol_table_dump(assembler_t *asm_ctx)
         const char *status_color = current->defined ? defined_color : undefined_color;
         const char *status_text = current->defined ? "DEFINED" : "UNDEFINED";
         
-        printf("║%s%3d%s │ %s%-21.21s%s │ %s0x%08X%s │ %s%-21s%s ║\n",
+        printf("|%s%3d%s | %s%-21.21s%s | %s0x%08X%s | %s%-21s%s|\n",
                header_color, ++count, reset_color,
                name_color, current->name, reset_color,
                address_color, current->address, reset_color,
@@ -135,11 +135,11 @@ void symbol_table_dump(assembler_t *asm_ctx)
     
     if (count == 0)
     {
-        printf("║    │ %s(no symbols)%s        │           │                       ║\n", 
+        printf("|    | %s(no symbols)%s        |           |                       |\n", 
                undefined_color, reset_color);
     }
     
-    printf("%s╚════╧═══════════════════════╧═══════════╧═══════════════════════╝%s\n", header_color, reset_color);
+    printf("%s+====+=======================+============+======================+%s\n", header_color, reset_color);
     printf("%sTotal symbols: %d%s\n\n", header_color, count, reset_color);
 }
 
@@ -579,7 +579,7 @@ void assembler_warning(assembler_t *asm_ctx, const char *format, ...)
 
 static char *read_file_content(const char *filename)
 {
-    FILE *file = fopen(filename, "r");
+    FILE *file = fopen(filename, "rb");  // Use binary mode to avoid Windows text mode issues
     if (!file)
         return NULL;
 
@@ -594,8 +594,8 @@ static char *read_file_content(const char *filename)
         return NULL;
     }
 
-    fread(content, 1, length, file);
-    content[length] = '\0';
+    size_t bytes_read = fread(content, 1, length, file);
+    content[bytes_read] = '\0';  // Use actual bytes read instead of length
     fclose(file);
 
     return content;
