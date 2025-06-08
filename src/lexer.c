@@ -50,7 +50,8 @@ register_t parse_register(const char *str)
     if (strcasecmp(str, "ds") == 0)
         return REG_DS;
     if (strcasecmp(str, "es") == 0)
-        return REG_ES;    if (strcasecmp(str, "ss") == 0)
+        return REG_ES;
+    if (strcasecmp(str, "ss") == 0)
         return REG_SS;
     if (strcasecmp(str, "fs") == 0)
         return REG_FS;
@@ -135,7 +136,8 @@ const char *register_to_string(register_t reg)
     case REG_DS:
         return "ds";
     case REG_ES:
-        return "es";    case REG_SS:
+        return "es";
+    case REG_SS:
         return "ss";
     case REG_FS:
         return "fs";
