@@ -14,20 +14,23 @@
 #define MAX_TOKENS_PER_LINE 16
 
 // Assembly modes
-typedef enum {
+typedef enum
+{
     MODE_16BIT = 16,
     MODE_32BIT = 32
 } asm_mode_t;
 
 // Output formats
-typedef enum {
+typedef enum
+{
     FORMAT_BIN,
     FORMAT_HEX,
     FORMAT_ELF
 } output_format_t;
 
 // Token types
-typedef enum {
+typedef enum
+{
     TOKEN_UNKNOWN,
     TOKEN_INSTRUCTION,
     TOKEN_REGISTER,
@@ -54,29 +57,47 @@ typedef enum {
 } token_type_t;
 
 // Register enumeration
-typedef enum {
+typedef enum
+{
     REG_NONE = -1,
     // 16-bit registers
-    REG_AX, REG_BX, REG_CX, REG_DX,
-    REG_SI, REG_DI, REG_BP, REG_SP,
-    REG_CS, REG_DS, REG_ES, REG_SS,
+    REG_AX,
+    REG_BX,
+    REG_CX,
+    REG_DX,
+    REG_SI,
+    REG_DI,
+    REG_BP,
+    REG_SP,
+    REG_CS,
+    REG_DS,
+    REG_ES,
+    REG_SS,
     // 8-bit registers
-    REG_AL, REG_AH, REG_BL, REG_BH,
-    REG_CL, REG_CH, REG_DL, REG_DH
+    REG_AL,
+    REG_AH,
+    REG_BL,
+    REG_BH,
+    REG_CL,
+    REG_CH,
+    REG_DL,
+    REG_DH
 } register_t;
 
 // Operand types
-typedef enum {
+typedef enum
+{
     OPERAND_NONE,
     OPERAND_REGISTER,
     OPERAND_IMMEDIATE,
     OPERAND_MEMORY,
-    OPERAND_FARPTR,    // Far pointer (segment:offset)
+    OPERAND_FARPTR, // Far pointer (segment:offset)
     OPERAND_LABEL
 } operand_type_t;
 
 // Token structure
-typedef struct {
+typedef struct
+{
     token_type_t type;
     char value[MAX_OPERAND_LENGTH];
     int line;
@@ -84,20 +105,25 @@ typedef struct {
 } token_t;
 
 // Operand structure
-typedef struct {
+typedef struct
+{
     operand_type_t type;
-    union {
+    union
+    {
         register_t reg;
-        int32_t immediate;        struct {
+        int32_t immediate;
+        struct
+        {
             register_t base;
             register_t index;
             int32_t displacement;
             int scale;
-            register_t segment;                // Segment override register (REG_NONE if no override)
-            bool has_label;                    // Indicates label-based memory operand
-            char label[MAX_LABEL_LENGTH];     // Label for direct memory addressing
+            register_t segment;           // Segment override register (REG_NONE if no override)
+            bool has_label;               // Indicates label-based memory operand
+            char label[MAX_LABEL_LENGTH]; // Label for direct memory addressing
         } memory;
-        struct {         // Far pointer value
+        struct
+        { // Far pointer value
             uint16_t segment;
             uint16_t offset;
         } far_ptr;
@@ -107,7 +133,8 @@ typedef struct {
 } operand_t;
 
 // Instruction structure
-typedef struct {
+typedef struct
+{
     char mnemonic[16];
     operand_t operands[3];
     int operand_count;
@@ -115,32 +142,35 @@ typedef struct {
 } instruction_t;
 
 // Symbol table entry
-typedef struct symbol {
+typedef struct symbol
+{
     char name[MAX_LABEL_LENGTH];
     uint32_t address;
     bool defined;
-    struct symbol* next;
+    struct symbol *next;
 } symbol_t;
 
 // Assembler context
-typedef struct {
-    FILE* input;
-    FILE* output;
-    char* input_filename;
-    char* output_filename;
+typedef struct
+{
+    FILE *input;
+    FILE *output;
+    char *input_filename;
+    char *output_filename;
     asm_mode_t mode;
-    asm_mode_t cmdline_mode;  // Mode set via command line flags
-    bool cmdline_mode_set;    // Whether command line mode was explicitly set
-    bool directive_mode_set;  // Whether #width directive was used
+    asm_mode_t cmdline_mode; // Mode set via command line flags
+    bool cmdline_mode_set;   // Whether command line mode was explicitly set
+    bool directive_mode_set; // Whether #width directive was used
     output_format_t format;
     uint32_t origin;
     uint32_t current_address;
-    symbol_t* symbols;
-    uint8_t* code_buffer;
-    size_t code_size;    size_t code_capacity;
+    symbol_t *symbols;
+    uint8_t *code_buffer;
+    size_t code_size;
+    size_t code_capacity;
     bool verbose;
     bool error_occurred;
-    int pass;  // Current assembler pass (1 or 2)
+    int pass; // Current assembler pass (1 or 2)
 } assembler_t;
 
 // Forward declarations
@@ -151,7 +181,7 @@ typedef struct {
 #include "assembler.h"
 
 #ifdef __linux__
-bool strcasecmp(const char* s1, const char* s2);
+bool strcasecmp(const char *s1, const char *s2);
 #endif
 
 #endif // NAS_H

@@ -1,7 +1,8 @@
 #include "nas.h"
 #include <getopt.h>
 
-void print_version() {
+void print_version()
+{
 #ifdef _WIN32
     printf("nas [nas-win-x64] ntos(6.2025.1.0) - 1.00\n");
     printf("Copyright (C) 2025 Nathan's Compiler Collection\n");
@@ -15,7 +16,8 @@ void print_version() {
 #endif
 }
 
-void print_usage(const char* program_name) {
+void print_usage(const char *program_name)
+{
     printf("Usage: %s [options] input_file -o output_file\n", program_name);
     printf("Options:\n");
     printf("  -m, --mode <mode>      Assembly mode (16 or 32, default: 16)\n");
@@ -29,13 +31,14 @@ void print_usage(const char* program_name) {
     printf("  %s --mode 16 --format hex input.asm -o output.hex\n", program_name);
 }
 
-int main(int argc, char* argv[]) {
-    char* input_file = NULL;
-    char* output_file = NULL;
+int main(int argc, char *argv[])
+{
+    char *input_file = NULL;
+    char *output_file = NULL;
     asm_mode_t mode = MODE_16BIT;
     output_format_t format = FORMAT_BIN;
     bool verbose = false;
-    
+
     static struct option long_options[] = {
         {"mode", required_argument, 0, 'm'},
         {"format", required_argument, 0, 'f'},
@@ -43,94 +46,111 @@ int main(int argc, char* argv[]) {
         {"verbose", no_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 0},
-        {0, 0, 0, 0}
-    };
-    
+        {0, 0, 0, 0}};
+
     int c;
     int option_index = 0;
-    
-    while ((c = getopt_long(argc, argv, "m:f:o:vh", long_options, &option_index)) != -1) {
-        switch (c) {
-            case 'm':
-                if (strcmp(optarg, "16") == 0) {
-                    mode = MODE_16BIT;
-                } else if (strcmp(optarg, "32") == 0) {
-                    mode = MODE_32BIT;
-                } else {
-                    fprintf(stderr, "Error: Invalid mode '%s'. Use 16 or 32.\n", optarg);
-                    return 1;
-                }
-                break;
-                
-            case 'f':
-                if (strcmp(optarg, "bin") == 0) {
-                    format = FORMAT_BIN;
-                } else if (strcmp(optarg, "hex") == 0) {
-                    format = FORMAT_HEX;
-                } else {
-                    fprintf(stderr, "Error: Invalid format '%s'. Use bin or hex.\n", optarg);
-                    return 1;
-                }
-                break;
-                
-            case 'o':
-                output_file = optarg;
-                break;
-                
-            case 'v':
-                verbose = true;
-                break;
-                
-            case 'h':
-                print_usage(argv[0]);
-                return 0;
-                
-            case 0:
-                if (strcmp(long_options[option_index].name, "version") == 0) {
-                    print_version();
-                    return 0;
-                }
-                break;
-                
-            case '?':
+
+    while ((c = getopt_long(argc, argv, "m:f:o:vh", long_options, &option_index)) != -1)
+    {
+        switch (c)
+        {
+        case 'm':
+            if (strcmp(optarg, "16") == 0)
+            {
+                mode = MODE_16BIT;
+            }
+            else if (strcmp(optarg, "32") == 0)
+            {
+                mode = MODE_32BIT;
+            }
+            else
+            {
+                fprintf(stderr, "Error: Invalid mode '%s'. Use 16 or 32.\n", optarg);
                 return 1;
-                
-            default:
-                abort();
+            }
+            break;
+
+        case 'f':
+            if (strcmp(optarg, "bin") == 0)
+            {
+                format = FORMAT_BIN;
+            }
+            else if (strcmp(optarg, "hex") == 0)
+            {
+                format = FORMAT_HEX;
+            }
+            else
+            {
+                fprintf(stderr, "Error: Invalid format '%s'. Use bin or hex.\n", optarg);
+                return 1;
+            }
+            break;
+
+        case 'o':
+            output_file = optarg;
+            break;
+
+        case 'v':
+            verbose = true;
+            break;
+
+        case 'h':
+            print_usage(argv[0]);
+            return 0;
+
+        case 0:
+            if (strcmp(long_options[option_index].name, "version") == 0)
+            {
+                print_version();
+                return 0;
+            }
+            break;
+
+        case '?':
+            return 1;
+
+        default:
+            abort();
         }
     }
-    
+
     // Get input file from remaining arguments
-    if (optind < argc) {
+    if (optind < argc)
+    {
         input_file = argv[optind];
     }
-    
+
     // Validate arguments
-    if (!input_file) {
+    if (!input_file)
+    {
         fprintf(stderr, "Error: No input file specified.\n");
         print_usage(argv[0]);
         return 1;
     }
-    
-    if (!output_file) {
+
+    if (!output_file)
+    {
         fprintf(stderr, "Error: No output file specified.\n");
         print_usage(argv[0]);
         return 1;
     }
-    
+
     // Create assembler
-    assembler_t* asm_ctx = assembler_create();
-    if (!asm_ctx) {
+    assembler_t *asm_ctx = assembler_create();
+    if (!asm_ctx)
+    {
         fprintf(stderr, "Error: Failed to create assembler.\n");
         return 1;
     }
-    
+
     // Configure assembler
     assembler_set_cmdline_mode(asm_ctx, mode);
     assembler_set_format(asm_ctx, format);
     asm_ctx->verbose = verbose;
-    
-    if (verbose) {
+
+    if (verbose)
+    {
         printf("NAS - Nathan's Assembler\n");
         printf("Input file: %s\n", input_file);
         printf("Output file: %s\n", output_file);
@@ -138,21 +158,23 @@ int main(int argc, char* argv[]) {
         printf("Format: %s\n", format == FORMAT_BIN ? "binary" : "hex");
         printf("\n");
     }
-    
+
     // Assemble the file
     bool success = assembler_assemble_file(asm_ctx, input_file, output_file);
-    
+
     // Cleanup
     assembler_destroy(asm_ctx);
-    
-    if (!success) {
+
+    if (!success)
+    {
         fprintf(stderr, "Assembly failed.\n");
         return 1;
     }
-    
-    if (verbose) {
+
+    if (verbose)
+    {
         printf("Assembly completed successfully.\n");
     }
-    
+
     return 0;
 }
