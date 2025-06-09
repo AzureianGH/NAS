@@ -232,7 +232,9 @@ bool symbol_check_undefined(assembler_t *asm_ctx)
 
     while (current)
     {
-        if (!current->defined)
+        // Only report undefined symbols if they are not external
+        // External symbols are meant to be undefined and resolved by the linker
+        if (!current->defined && !current->external)
         {
             assembler_error(asm_ctx, "Undefined symbol: '%s'", current->name);
             has_undefined = true;
@@ -247,8 +249,10 @@ bool symbol_check_undefined(assembler_t *asm_ctx)
         current = asm_ctx->symbols;
         while (current)
         {
-            fprintf(stderr, "  %s -> 0x%04X (defined=%s)\n",
-                    current->name, current->address, current->defined ? "yes" : "no");
+            fprintf(stderr, "  %s -> 0x%04X (defined=%s, external=%s)\n",
+                    current->name, current->address, 
+                    current->defined ? "yes" : "no",
+                    current->external ? "yes" : "no");
             current = current->next;
         }
         fprintf(stderr, "\n");
@@ -405,12 +409,68 @@ typedef struct {
 #define EV_CURRENT  1
 #define ELFOSABI_SYSV 0
 
-#define ET_EXEC     2
-#define EM_386      3
-#define PT_LOAD     1
-#define PF_X        1
-#define PF_W        2
-#define PF_R        4
+#define ET_REL      1      // Relocatable object file
+#define ET_EXEC     2      // Executable file
+#define EM_386      3      // Intel 80386
+#define PT_LOAD     1      // Loadable segment
+#define PF_X        1      // Execute
+#define PF_W        2      // Write
+#define PF_R        4      // Read
+
+// Section header types
+#define SHT_NULL     0     // Section header table entry unused
+#define SHT_PROGBITS 1     // Program data
+#define SHT_SYMTAB   2     // Symbol table
+#define SHT_STRTAB   3     // String table
+#define SHT_NOBITS   8     // Program space with no data (bss)
+
+// Section header flags
+#define SHF_WRITE    0x1   // Writable
+#define SHF_ALLOC    0x2   // Occupies memory during execution
+#define SHF_EXECINSTR 0x4  // Executable
+
+// Special section indices
+#define SHN_UNDEF    0     // Undefined section
+#define SHN_ABS      0xfff1 // Absolute values
+
+// Symbol binding
+#define STB_LOCAL   0      // Local symbol
+#define STB_GLOBAL  1      // Global symbol
+#define STB_WEAK    2      // Weak symbol
+
+// Symbol types
+#define STT_NOTYPE  0      // Symbol type not specified
+#define STT_OBJECT  1      // Symbol is a data object
+#define STT_FUNC    2      // Symbol is a code object
+#define STT_SECTION 3      // Symbol associated with a section
+#define STT_FILE    4      // Symbol's name is file name
+
+// Macro to combine symbol binding and type
+#define ELF32_ST_INFO(bind, type) (((bind) << 4) + ((type) & 0xf))
+
+// ELF symbol table entry
+typedef struct {
+    uint32_t st_name;      // Symbol name (string table index)
+    uint32_t st_value;     // Symbol value
+    uint32_t st_size;      // Symbol size
+    uint8_t st_info;       // Symbol type and binding
+    uint8_t st_other;      // Symbol visibility
+    uint16_t st_shndx;     // Section index
+} __attribute__((packed)) Elf32_Sym;
+
+// Section header structure
+typedef struct {
+    uint32_t sh_name;      // Section name (string table index)
+    uint32_t sh_type;      // Section type
+    uint32_t sh_flags;     // Section flags
+    uint32_t sh_addr;      // Section virtual addr at execution
+    uint32_t sh_offset;    // Section file offset
+    uint32_t sh_size;      // Section size in bytes
+    uint32_t sh_link;      // Link to another section
+    uint32_t sh_info;      // Additional section information
+    uint32_t sh_addralign; // Section alignment
+    uint32_t sh_entsize;   // Entry size if section holds table
+} __attribute__((packed)) Elf32_Shdr;
 
 bool output_write_elf(assembler_t *asm_ctx)
 {
@@ -421,39 +481,123 @@ bool output_write_elf(assembler_t *asm_ctx)
     if (asm_ctx->mode != MODE_32BIT)
         return false;
 
-    // Calculate addresses and sizes
-    const uint32_t BASE_ADDR = 0x08048000;  // Standard Linux base address
-    const uint32_t ELF_HEADER_SIZE = sizeof(Elf32_Ehdr);
-    const uint32_t PROGRAM_HEADER_SIZE = sizeof(Elf32_Phdr);
-    
-    // Count how many sections we have
+    // Count sections that have data
     int section_count = 0;
     section_t *current = asm_ctx->sections;
     while (current)
     {
-        section_count++;
+        if (current->size > 0)
+            section_count++;
+        current = current->next;
+    }    // Calculate symbol counts
+    int symbol_count = 2; // Start with 2 for the null symbol and FILE symbol
+    symbol_t *sym = asm_ctx->symbols;
+    while (sym)
+    {
+        symbol_count++;
+        sym = sym->next;
+    }
+
+    // Build symbol string table
+    char *strtab = malloc(4096); // Generous buffer
+    if (!strtab)
+        return false;
+      uint32_t strtab_offset = 1; // Start after null byte
+    strtab[0] = '\0'; // Null string at offset 0
+      // Add filename to string table for FILE symbol
+    uint32_t filename_offset = strtab_offset;
+    const char *full_filename = asm_ctx->input_filename ? asm_ctx->input_filename : "unknown.asm";
+    
+    // Extract just the basename (filename without path) for FILE symbol
+    const char *filename = full_filename;
+    const char *last_slash = strrchr(full_filename, '/');
+    const char *last_backslash = strrchr(full_filename, '\\');
+    if (last_slash || last_backslash)
+    {
+        // Use the last occurrence of either slash or backslash
+        const char *last_separator = (last_slash > last_backslash) ? last_slash : last_backslash;
+        if (last_separator)
+            filename = last_separator + 1;
+    }
+    
+    size_t filename_len = strlen(filename);
+    if (strtab_offset + filename_len + 1 >= 4096)
+    {
+        free(strtab);
+        return false; // String table too large
+    }
+    strcpy(&strtab[strtab_offset], filename);
+    strtab_offset += filename_len + 1;
+    
+    // Build symbol name offset table
+    uint32_t *symbol_name_offsets = malloc(symbol_count * sizeof(uint32_t));
+    if (!symbol_name_offsets)
+    {
+        free(strtab);
+        return false;
+    }
+    
+    // Add all symbol names to string table and record their offsets
+    sym = asm_ctx->symbols;
+    int symbol_index = 1; // Start at 1 (skip null symbol)
+    while (sym)
+    {
+        size_t name_len = strlen(sym->name);
+        if (strtab_offset + name_len + 1 >= 4096)
+        {
+            free(strtab);
+            free(symbol_name_offsets);
+            return false; // String table too large
+        }
+        strcpy(&strtab[strtab_offset], sym->name);
+        symbol_name_offsets[symbol_index] = strtab_offset; // Store offset in separate array
+        strtab_offset += name_len + 1;
+        symbol_index++;
+        sym = sym->next;
+    }
+    
+    uint32_t strtab_size = strtab_offset;
+
+    // Calculate section count: null + sections + .symtab + .strtab + .shstrtab = section_count + 4
+    int total_sections = section_count + 4;
+    
+    // Calculate file layout
+    uint32_t elf_header_size = sizeof(Elf32_Ehdr);
+    
+    // Section data starts after ELF header
+    uint32_t section_data_offset = elf_header_size;
+    uint32_t current_offset = section_data_offset;
+    
+    // Calculate section data offsets
+    current = asm_ctx->sections;
+    while (current)
+    {
+        if (current->size > 0 && current->type != SECTION_BSS)
+        {
+            current_offset += current->size;
+        }
         current = current->next;
     }
     
-    const uint32_t HEADERS_SIZE = ELF_HEADER_SIZE + PROGRAM_HEADER_SIZE * section_count;
+    // Symbol table comes after section data
+    uint32_t symtab_offset = current_offset;
+    uint32_t symtab_size = symbol_count * sizeof(Elf32_Sym);
+    current_offset += symtab_size;
     
-    // Look for _start symbol to set entry point
-    symbol_t *start_symbol = symbol_lookup(asm_ctx, "_start");
-    section_t *text_section = section_find(asm_ctx, ".text");
-    uint32_t entry_offset = 0;
+    // String table comes after symbol table
+    uint32_t strtab_file_offset = current_offset;
+    current_offset += strtab_size;
     
-    if (start_symbol && text_section)
-    {
-        entry_offset = text_section->address + (start_symbol->address - text_section->address);
-    }
-    else if (text_section)
-    {
-        entry_offset = text_section->address;
-    }
+    // Section header string table comes after string table
+    uint32_t shstrtab_offset = current_offset;
+    const char section_names[] = "\0.text\0.data\0.bss\0.symtab\0.strtab\0.shstrtab\0";
+    uint32_t shstrtab_size = sizeof(section_names) - 1;
+    current_offset += shstrtab_size;
     
-    uint32_t entry_point = BASE_ADDR + HEADERS_SIZE + entry_offset;
+    // Section headers come last
+    uint32_t section_headers_offset = current_offset;
 
-    // Create ELF header
+    // Create ELF header for relocatable object file
     Elf32_Ehdr ehdr = {0};
     ehdr.e_ident[EI_MAG0] = ELFMAG0;
     ehdr.e_ident[EI_MAG1] = ELFMAG1;
@@ -464,79 +608,31 @@ bool output_write_elf(assembler_t *asm_ctx)
     ehdr.e_ident[EI_VERSION] = EV_CURRENT;
     ehdr.e_ident[EI_OSABI] = ELFOSABI_SYSV;
     
-    ehdr.e_type = ET_EXEC;
+    ehdr.e_type = ET_REL;           // Relocatable object file
     ehdr.e_machine = EM_386;
     ehdr.e_version = EV_CURRENT;
-    ehdr.e_entry = entry_point;
-    ehdr.e_phoff = ELF_HEADER_SIZE;
-    ehdr.e_shoff = 0;  // No section headers for now
+    ehdr.e_entry = 0;               // No entry point for relocatable
+    ehdr.e_phoff = 0;               // No program headers for relocatable
+    ehdr.e_shoff = section_headers_offset;
     ehdr.e_flags = 0;
-    ehdr.e_ehsize = ELF_HEADER_SIZE;
-    ehdr.e_phentsize = PROGRAM_HEADER_SIZE;
-    ehdr.e_phnum = section_count;  // One program header per section
-    ehdr.e_shentsize = 0;
-    ehdr.e_shnum = 0;
-    ehdr.e_shstrndx = 0;
+    ehdr.e_ehsize = elf_header_size;
+    ehdr.e_phentsize = 0;           // No program headers
+    ehdr.e_phnum = 0;               // No program headers
+    ehdr.e_shentsize = sizeof(Elf32_Shdr);
+    ehdr.e_shnum = total_sections;
+    ehdr.e_shstrndx = total_sections - 1; // .shstrtab is last section
 
     // Write ELF header
     if (fwrite(&ehdr, sizeof(Elf32_Ehdr), 1, asm_ctx->output) != 1)
-        return false;
-
-    // Write program headers for each section
-    uint32_t file_offset = HEADERS_SIZE;
-    current = asm_ctx->sections;
-    
-    // Process sections in order: .text, .data, .bss
-    section_type_t section_order[] = {SECTION_TEXT, SECTION_DATA, SECTION_BSS};
-    
-    for (int i = 0; i < 3; i++)
     {
-        section_type_t type = section_order[i];
-        current = asm_ctx->sections;
-        
-        while (current)
-        {
-            if (current->type == type && current->size > 0)
-            {
-                Elf32_Phdr phdr = {0};
-                phdr.p_type = PT_LOAD;
-                phdr.p_offset = file_offset;
-                phdr.p_vaddr = BASE_ADDR + file_offset;
-                phdr.p_paddr = phdr.p_vaddr;
-                
-                if (current->type == SECTION_BSS)
-                {
-                    // BSS section: no data in file, but occupies memory
-                    phdr.p_filesz = 0;
-                    phdr.p_memsz = current->size;
-                    phdr.p_flags = PF_R | PF_W;  // Read and write permissions
-                }
-                else
-                {
-                    // Text/Data sections: have data in file and memory
-                    phdr.p_filesz = current->size;
-                    phdr.p_memsz = current->size;
-                    
-                    if (current->type == SECTION_TEXT)
-                        phdr.p_flags = PF_R | PF_X;  // Read and execute permissions
-                    else
-                        phdr.p_flags = PF_R | PF_W;  // Read and write permissions
-                        
-                    file_offset += current->size;
-                }
-                
-                phdr.p_align = 0x1000;  // Page alignment
-
-                // Write program header
-                if (fwrite(&phdr, sizeof(Elf32_Phdr), 1, asm_ctx->output) != 1)
-                    return false;
-            }
-            current = current->next;
-        }
+        free(strtab);
+        return false;
     }
 
-    // Write section data (skip BSS as it has no file data)
-    for (int i = 0; i < 2; i++)  // Only TEXT and DATA, not BSS
+    // Write section data in order: .text, .data (skip .bss as it has no file data)
+    section_type_t section_order[] = {SECTION_TEXT, SECTION_DATA};
+    
+    for (int i = 0; i < 2; i++)
     {
         section_type_t type = section_order[i];
         current = asm_ctx->sections;
@@ -546,11 +642,329 @@ bool output_write_elf(assembler_t *asm_ctx)
             if (current->type == type && current->size > 0 && current->data)
             {
                 if (fwrite(current->data, 1, current->size, asm_ctx->output) != current->size)
+                {
+                    free(strtab);
                     return false;
+                }
             }
             current = current->next;
         }
+    }    // Write symbol table
+    // First symbol is always null
+    Elf32_Sym null_sym = {0};
+    if (fwrite(&null_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
+    {
+        free(strtab);
+        return false;
     }
+    
+    // Second symbol is FILE symbol with source filename
+    Elf32_Sym file_sym = {0};
+    file_sym.st_name = filename_offset;
+    file_sym.st_value = 0;
+    file_sym.st_size = 0;
+    file_sym.st_info = ELF32_ST_INFO(STB_LOCAL, STT_FILE);
+    file_sym.st_other = 0;
+    file_sym.st_shndx = SHN_ABS; // FILE symbols use SHN_ABS
+    if (fwrite(&file_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
+    {
+        free(strtab);
+        return false;
+    }
+    
+    // Write all symbols - local symbols first, then global symbols (ELF convention)
+    sym = asm_ctx->symbols;
+    symbol_index = 1; // Reset index for symbol table writing
+    
+    // First pass: write local symbols
+    while (sym)
+    {
+        if (!sym->global) // Write local symbols first
+        {
+            Elf32_Sym elf_sym = {0};
+            elf_sym.st_name = symbol_name_offsets[symbol_index]; // Use stored offset
+            elf_sym.st_value = sym->defined ? sym->address : 0; // Use actual symbol address
+            elf_sym.st_size = 0; // Size unknown for most symbols
+              // Determine symbol type and binding
+            uint8_t bind = STB_LOCAL;
+            uint8_t type = STT_NOTYPE; // Default type
+            
+            // Try to determine if it's a function by looking at the section
+            if (sym->section == SECTION_TEXT)
+            {
+                type = STT_FUNC;
+            }
+            else if (sym->section == SECTION_DATA || sym->section == SECTION_BSS)
+            {
+                type = STT_OBJECT;
+            }
+            
+            elf_sym.st_info = ELF32_ST_INFO(bind, type);
+            elf_sym.st_other = 0;
+            
+            // Set section index based on symbol section
+            // External symbols should always be undefined (SHN_UNDEF)
+            if (sym->external)
+            {
+                elf_sym.st_shndx = SHN_UNDEF; // External symbols are undefined
+            }
+            else if (sym->section == SECTION_TEXT)
+            {
+                elf_sym.st_shndx = 1; // .text is section 1
+            }
+            else if (sym->section == SECTION_DATA)
+            {
+                elf_sym.st_shndx = 2; // .data is section 2  
+            }
+            else if (sym->section == SECTION_BSS)
+            {
+                elf_sym.st_shndx = 3; // .bss is section 3
+            }
+            else
+            {
+                elf_sym.st_shndx = SHN_UNDEF; // Undefined section
+            }
+            
+            if (fwrite(&elf_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
+            {
+                free(strtab);
+                free(symbol_name_offsets);
+                return false;
+            }
+        }
+        symbol_index++;
+        sym = sym->next;
+    }
+    
+    // Second pass: write global symbols
+    sym = asm_ctx->symbols;
+    symbol_index = 1; // Reset index
+    while (sym)
+    {
+        if (sym->global) // Write global symbols second
+        {
+            Elf32_Sym elf_sym = {0};
+            elf_sym.st_name = symbol_name_offsets[symbol_index]; // Use stored offset
+            elf_sym.st_value = sym->defined ? sym->address : 0; // Use actual symbol address
+            elf_sym.st_size = 0; // Size unknown for most symbols
+              // Determine symbol type and binding
+            uint8_t bind = STB_GLOBAL;
+            uint8_t type = STT_NOTYPE; // Default type
+            
+            // Try to determine if it's a function by looking at the section
+            if (sym->section == SECTION_TEXT)
+            {
+                type = STT_FUNC;
+            }
+            else if (sym->section == SECTION_DATA || sym->section == SECTION_BSS)
+            {
+                type = STT_OBJECT;
+            }
+            
+            elf_sym.st_info = ELF32_ST_INFO(bind, type);
+            elf_sym.st_other = 0;
+            
+            // Set section index based on symbol section
+            // External symbols should always be undefined (SHN_UNDEF)
+            if (sym->external)
+            {
+                elf_sym.st_shndx = SHN_UNDEF; // External symbols are undefined
+            }
+            else if (sym->section == SECTION_TEXT)
+            {
+                elf_sym.st_shndx = 1; // .text is section 1
+            }
+            else if (sym->section == SECTION_DATA)
+            {
+                elf_sym.st_shndx = 2; // .data is section 2  
+            }
+            else if (sym->section == SECTION_BSS)
+            {
+                elf_sym.st_shndx = 3; // .bss is section 3
+            }
+            else
+            {
+                elf_sym.st_shndx = SHN_UNDEF; // Undefined section
+            }
+            
+            if (fwrite(&elf_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
+            {
+                free(strtab);
+                free(symbol_name_offsets);
+                return false;
+            }
+        }
+        symbol_index++;
+        sym = sym->next;
+    }
+
+    // Clean up offset table
+    free(symbol_name_offsets);    // Write string table
+    if (fwrite(strtab, 1, strtab_size, asm_ctx->output) != strtab_size)
+    {
+        free(strtab);
+        return false;
+    }
+    
+    free(strtab);
+
+    // Write .shstrtab (section header string table)
+    if (fwrite(section_names, 1, shstrtab_size, asm_ctx->output) != shstrtab_size)
+        return false;
+
+    // Write section headers
+    
+    // 1. NULL section header (index 0)
+    Elf32_Shdr null_shdr = {0};
+    if (fwrite(&null_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+        return false;
+
+    // 2. Section headers for actual sections
+    uint32_t file_offset = section_data_offset;
+    
+    // String table offsets: \0.text\0.data\0.bss\0.symtab\0.strtab\0.shstrtab\0
+    //                       0 1     7 13   19 24      32 40     
+    uint32_t text_name_offset = 1;     // ".text"
+    uint32_t data_name_offset = 7;     // ".data" 
+    uint32_t bss_name_offset = 13;     // ".bss"
+    uint32_t symtab_name_offset = 18;  // ".symtab"
+    uint32_t strtab_name_offset = 26;  // ".strtab"
+    uint32_t shstrtab_name_offset = 34; // ".shstrtab"    // Count local symbols for sh_info (index of first non-local symbol)
+    int local_symbol_count = 2; // Start with 2 for null symbol and FILE symbol
+    sym = asm_ctx->symbols;
+    while (sym)
+    {
+        if (!sym->global)
+            local_symbol_count++;
+        sym = sym->next;
+    }
+    
+    // Write .text section header if it exists
+    current = asm_ctx->sections;
+    while (current)
+    {
+        if (current->type == SECTION_TEXT && current->size > 0)
+        {
+            Elf32_Shdr shdr = {0};
+            shdr.sh_name = text_name_offset;
+            shdr.sh_type = SHT_PROGBITS;
+            shdr.sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+            shdr.sh_addr = 0;
+            shdr.sh_offset = file_offset;
+            shdr.sh_size = current->size;
+            shdr.sh_link = 0;
+            shdr.sh_info = 0;
+            shdr.sh_addralign = 1;
+            shdr.sh_entsize = 0;
+            
+            if (fwrite(&shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+                return false;
+                
+            file_offset += current->size;
+            break;
+        }
+        current = current->next;
+    }
+    
+    // Write .data section header if it exists
+    current = asm_ctx->sections;
+    while (current)
+    {
+        if (current->type == SECTION_DATA && current->size > 0)
+        {
+            Elf32_Shdr shdr = {0};
+            shdr.sh_name = data_name_offset;
+            shdr.sh_type = SHT_PROGBITS;
+            shdr.sh_flags = SHF_ALLOC | SHF_WRITE;
+            shdr.sh_addr = 0;
+            shdr.sh_offset = file_offset;
+            shdr.sh_size = current->size;
+            shdr.sh_link = 0;
+            shdr.sh_info = 0;
+            shdr.sh_addralign = 1;
+            shdr.sh_entsize = 0;
+            
+            if (fwrite(&shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+                return false;
+                
+            file_offset += current->size;
+            break;
+        }
+        current = current->next;
+    }
+    
+    // Write .bss section header if it exists (no file data)
+    current = asm_ctx->sections;
+    while (current)
+    {
+        if (current->type == SECTION_BSS && current->size > 0)
+        {
+            Elf32_Shdr shdr = {0};
+            shdr.sh_name = bss_name_offset;
+            shdr.sh_type = SHT_NOBITS;
+            shdr.sh_flags = SHF_ALLOC | SHF_WRITE;
+            shdr.sh_addr = 0;
+            shdr.sh_offset = 0; // No file data
+            shdr.sh_size = current->size;
+            shdr.sh_link = 0;
+            shdr.sh_info = 0;
+            shdr.sh_addralign = 1;
+            shdr.sh_entsize = 0;
+            
+            if (fwrite(&shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+                return false;
+            break;
+        }
+        current = current->next;
+    }
+
+    // Write .symtab section header
+    Elf32_Shdr symtab_shdr = {0};
+    symtab_shdr.sh_name = symtab_name_offset;
+    symtab_shdr.sh_type = SHT_SYMTAB;
+    symtab_shdr.sh_flags = 0;
+    symtab_shdr.sh_addr = 0;
+    symtab_shdr.sh_offset = symtab_offset;
+    symtab_shdr.sh_size = symtab_size;
+    symtab_shdr.sh_link = total_sections - 2; // Index of .strtab section
+    symtab_shdr.sh_info = local_symbol_count; // Index of first non-local symbol
+    symtab_shdr.sh_addralign = 4;
+    symtab_shdr.sh_entsize = sizeof(Elf32_Sym);
+    
+    if (fwrite(&symtab_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+        return false;
+
+    // Write .strtab section header
+    Elf32_Shdr strtab_shdr = {0};
+    strtab_shdr.sh_name = strtab_name_offset;
+    strtab_shdr.sh_type = SHT_STRTAB;
+    strtab_shdr.sh_flags = 0;
+    strtab_shdr.sh_addr = 0;
+    strtab_shdr.sh_offset = strtab_file_offset;
+    strtab_shdr.sh_size = strtab_size;
+    strtab_shdr.sh_link = 0;
+    strtab_shdr.sh_info = 0;
+    strtab_shdr.sh_addralign = 1;
+    strtab_shdr.sh_entsize = 0;
+    
+    if (fwrite(&strtab_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+        return false;
+
+    // Write .shstrtab section header (last section)
+    Elf32_Shdr shstrtab_shdr = {0};
+    shstrtab_shdr.sh_name = shstrtab_name_offset;
+    shstrtab_shdr.sh_type = SHT_STRTAB;
+    shstrtab_shdr.sh_flags = 0;
+    shstrtab_shdr.sh_addr = 0;
+    shstrtab_shdr.sh_offset = shstrtab_offset;
+    shstrtab_shdr.sh_size = shstrtab_size;
+    shstrtab_shdr.sh_link = 0;
+    shstrtab_shdr.sh_info = 0;
+    shstrtab_shdr.sh_addralign = 1;
+    shstrtab_shdr.sh_entsize = 0;
+    
+    if (fwrite(&shstrtab_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
+        return false;
 
     return true;
 }
@@ -729,6 +1143,9 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
 }
 bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const char *output_file)
 {
+    // Store input filename in assembler context
+    asm_ctx->input_filename = (char*)input_file;
+    
     // Read input file
     char *input_content = read_file_content(input_file);
     if (!input_content)
@@ -953,4 +1370,51 @@ size_t section_get_total_size(assembler_t *asm_ctx)
     }
     
     return total;
+}
+
+bool symbol_mark_global(assembler_t *asm_ctx, const char *name)
+{
+    if (!asm_ctx || !name)
+        return false;
+
+    symbol_t *symbol = symbol_lookup(asm_ctx, name);
+    if (!symbol)
+    {
+        // Create undefined symbol and mark as global
+        if (!symbol_reference(asm_ctx, name))
+            return false;
+        symbol = symbol_lookup(asm_ctx, name);
+    }
+
+    if (symbol)
+    {
+        symbol->global = true;
+        return true;
+    }
+
+    return false;
+}
+
+bool symbol_mark_external(assembler_t *asm_ctx, const char *name)
+{
+    if (!asm_ctx || !name)
+        return false;
+
+    symbol_t *symbol = symbol_lookup(asm_ctx, name);
+    if (!symbol)
+    {
+        // Create undefined external symbol
+        if (!symbol_reference(asm_ctx, name))
+            return false;
+        symbol = symbol_lookup(asm_ctx, name);
+    }
+
+    if (symbol)
+    {
+        symbol->external = true;
+        symbol->global = true; // External symbols are also global
+        return true;
+    }
+
+    return false;
 }

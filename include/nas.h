@@ -187,6 +187,8 @@ typedef struct symbol
     char name[MAX_LABEL_LENGTH];
     uint32_t address;
     bool defined;
+    bool global;     // Symbol is global (exported for linking)
+    bool external;   // Symbol is external (imported from another object)
     section_type_t section; // Which section this symbol belongs to
     struct symbol *next;
 } symbol_t;

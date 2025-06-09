@@ -294,30 +294,16 @@ operand_t parser_parse_operand(parser_t *parser)
         {
             operand.size = explicit_size;
         }
-        break;    case TOKEN_LABEL:
-        // Check if this is a defined symbol (like from #define)
+        break;    case TOKEN_LABEL:        // Check if this is a defined symbol (like from #define)
         symbol_t *symbol = symbol_lookup(parser->assembler, parser->current_token.value);
         if (symbol && symbol->defined)
         {
             // Convert defined symbol to immediate operand
             operand.type = OPERAND_IMMEDIATE;
             
-            // For ELF format, convert relative address to absolute virtual address
-            if (parser->assembler->format == FORMAT_ELF)
-            {
-                // ELF virtual address = BASE_ADDR + HEADERS_SIZE + relative_offset
-                const uint32_t BASE_ADDR = 0x08048000;  // Standard Linux base address
-                const uint32_t ELF_HEADER_SIZE = 52;
-                const uint32_t PROGRAM_HEADER_SIZE = 32;
-                const uint32_t HEADERS_SIZE = ELF_HEADER_SIZE + PROGRAM_HEADER_SIZE;
-                
-                operand.value.immediate = (int32_t)(BASE_ADDR + HEADERS_SIZE + symbol->address);
-            }
-            else
-            {
-                // For other formats, use relative address directly
-                operand.value.immediate = (int32_t)symbol->address;
-            }
+            // For relocatable ELF objects, use relative addresses that will be resolved by the linker
+            // For other formats, use the address as-is
+            operand.value.immediate = (int32_t)symbol->address;
             
             operand.size = explicit_size ? explicit_size : 16; // Default to 16-bit
         }
@@ -798,8 +784,123 @@ bool parser_parse_directive(parser_t *parser)
         {
             assembler_error(parser->assembler, "Expected immediate value after #resd directive at line %d",
                             parser->current_token.line);
-            return false;
-        }    }
+            return false;        }    }
+    // Handle global directive
+    else if (strcmp(directive, "#global") == 0)
+    {
+        // Parse comma-separated list of symbol names
+        do
+        {
+            if (parser->current_token.type == TOKEN_LABEL)
+            {
+                char symbol_name[MAX_LABEL_LENGTH];
+                strncpy(symbol_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
+                symbol_name[MAX_LABEL_LENGTH - 1] = '\0';
+                
+                if (!symbol_mark_global(parser->assembler, symbol_name))
+                {
+                    assembler_error(parser->assembler, "Failed to mark symbol '%s' as global at line %d",
+                                    symbol_name, parser->current_token.line);
+                    return false;
+                }
+                
+                parser_advance(parser); // consume symbol name
+                
+                // Check for comma to continue parsing more symbols
+                if (parser->current_token.type == TOKEN_COMMA)
+                {
+                    parser_advance(parser); // consume comma
+                }
+                else
+                {
+                    break; // No more symbols
+                }
+            }
+            else
+            {
+                assembler_error(parser->assembler, "Expected symbol name in #global directive at line %d",
+                                parser->current_token.line);
+                return false;
+            }
+        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
+    }
+    // Handle extern directive
+    else if (strcmp(directive, "#extern") == 0)
+    {
+        // Parse comma-separated list of symbol names
+        do
+        {
+            if (parser->current_token.type == TOKEN_LABEL)
+            {
+                char symbol_name[MAX_LABEL_LENGTH];
+                strncpy(symbol_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
+                symbol_name[MAX_LABEL_LENGTH - 1] = '\0';
+                
+                if (!symbol_mark_external(parser->assembler, symbol_name))
+                {
+                    assembler_error(parser->assembler, "Failed to mark symbol '%s' as external at line %d",
+                                    symbol_name, parser->current_token.line);
+                    return false;
+                }
+                
+                parser_advance(parser); // consume symbol name
+                
+                // Check for comma to continue parsing more symbols
+                if (parser->current_token.type == TOKEN_COMMA)
+                {
+                    parser_advance(parser); // consume comma
+                }
+                else
+                {
+                    break; // No more symbols
+                }
+            }
+            else
+            {
+                assembler_error(parser->assembler, "Expected symbol name in #extern directive at line %d",
+                                parser->current_token.line);
+                return false;
+            }        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
+    }
+    // Handle extend directive (similar to extern but for extending/importing symbols)
+    else if (strcmp(directive, "#extend") == 0)
+    {
+        // Parse comma-separated list of symbol names
+        do
+        {
+            if (parser->current_token.type == TOKEN_LABEL)
+            {
+                char symbol_name[MAX_LABEL_LENGTH];
+                strncpy(symbol_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
+                symbol_name[MAX_LABEL_LENGTH - 1] = '\0';
+                
+                if (!symbol_mark_external(parser->assembler, symbol_name))
+                {
+                    assembler_error(parser->assembler, "Failed to mark symbol '%s' as extended/external at line %d",
+                                    symbol_name, parser->current_token.line);
+                    return false;
+                }
+                
+                parser_advance(parser); // consume symbol name
+                
+                // Check for comma to continue parsing more symbols
+                if (parser->current_token.type == TOKEN_COMMA)
+                {
+                    parser_advance(parser); // consume comma
+                }
+                else
+                {
+                    break; // No more symbols
+                }
+            }
+            else
+            {
+                assembler_error(parser->assembler, "Expected symbol name in #extend directive at line %d",
+                                parser->current_token.line);
+                return false;
+            }
+        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
+    }
     else
     {
         // Unknown directive

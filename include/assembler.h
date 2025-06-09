@@ -16,6 +16,8 @@ bool assembler_set_origin(assembler_t *asm_ctx, uint32_t origin);
 symbol_t *symbol_lookup(assembler_t *asm_ctx, const char *name);
 bool symbol_define(assembler_t *asm_ctx, const char *name, uint32_t address);
 bool symbol_reference(assembler_t *asm_ctx, const char *name);
+bool symbol_mark_global(assembler_t *asm_ctx, const char *name);
+bool symbol_mark_external(assembler_t *asm_ctx, const char *name);
 void symbol_table_destroy(symbol_t *symbols);
 void symbol_table_dump(assembler_t *asm_ctx);
 bool symbol_check_undefined(assembler_t *asm_ctx);

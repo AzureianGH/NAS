@@ -7,7 +7,7 @@
 typedef enum
 {
     ENC_NONE,
-    ENC_SINGLE,     // Single byte opcode (cli, sti, ret)
+    ENC_SINGLE,     // Single byte opcode (cli, sti, ret)    
     ENC_REG_REG,    // Register to register (mov ax, bx)
     ENC_REG_IMM,    // Register immediate (mov ax, 0x1234)
     ENC_REG_MEM,    // Register memory (mov ax, [bx])
@@ -15,7 +15,8 @@ typedef enum
     ENC_MEM_IMM,    // Memory immediate (mov [bx], 0x1234)
     ENC_PUSH_REG,   // Push register
     ENC_POP_REG,    // Pop register
-    ENC_PUSH_IMM,   // Push immediate    
+    ENC_PUSH_IMM,   // Push immediate
+    ENC_PUSH_MEM,   // Push memory
     ENC_CALL_REL,   // Call relative
     ENC_JMP_REL,    // Jump relative
     ENC_INT_IMM,    // Interrupt immediate
