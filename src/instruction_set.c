@@ -2,7 +2,7 @@
 #include <string.h>
 
 // Instruction definitions for 16-bit x86
-static const instruction_def_t instruction_table[] = {    // Data movement
+static const instruction_def_t instruction_table[] = { // Data movement
     {"mov", ENC_REG_REG, 0x89, 0, true, false, false, 2},
     {"push", ENC_PUSH_REG, 0x50, 0, false, false, false, 1},
     {"push", ENC_PUSH_MEM, 0xFF, 6, true, false, false, 1},
@@ -379,7 +379,7 @@ uint8_t register_to_modrm(register_t reg)
     case REG_BH:
     case REG_DI:
     case REG_EDI:
-        return 7;    // Segment registers
+        return 7; // Segment registers
     case REG_ES:
         return 0;
     case REG_CS:
@@ -434,7 +434,8 @@ int get_register_size(register_t reg)
     case REG_SI:
     case REG_DI:
     case REG_BP:
-    case REG_SP:    case REG_CS:
+    case REG_SP:
+    case REG_CS:
     case REG_DS:
     case REG_ES:
     case REG_SS:
@@ -446,7 +447,8 @@ int get_register_size(register_t reg)
     case REG_ECX:
     case REG_EDX:
     case REG_ESI:
-    case REG_EDI:    case REG_EBP:
+    case REG_EDI:
+    case REG_EBP:
     case REG_ESP:
         return 32;
     // Control registers (32-bit)
@@ -659,7 +661,8 @@ static bool encode_mov_reg_reg(const instruction_t *instr, uint8_t *buffer, size
         buffer[1] = make_modrm(3, dst_code, src_code);
         *size = 2;
         return true;
-    }    else if (!is_segment_register(dst) && is_segment_register(src))
+    }
+    else if (!is_segment_register(dst) && is_segment_register(src))
     {
         // MOV r/m16, Sreg (move from segment register)
         buffer[0] = 0x8C;
@@ -1407,7 +1410,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 }
                 target_addr = symbol->address;
                 target_available = true;
-            }            else
+            }
+            else
             {
                 // Symbol not found or not defined - check if it's external
                 if (asm_ctx->verbose)
@@ -1424,7 +1428,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                                instr->operands[0].value.label);
                     }
                 }
-                  // If this is an external symbol, we need to generate a relocation entry
+                // If this is an external symbol, we need to generate a relocation entry
                 if (symbol && symbol->external && asm_ctx->pass == 2)
                 {
                     // Generate relocation entry for external symbol
@@ -1432,16 +1436,16 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                     section_t *current_section = section_get_current(asm_ctx);
                     section_type_t section_type = current_section ? current_section->type : SECTION_TEXT;
                     uint32_t offset_in_section = current_addr - (current_section ? current_section->address : 0);
-                    
+
                     // Determine relocation type based on instruction
                     int relocation_type = R_386_PC32; // Default for call/jmp (PC-relative)
-                    
+
                     if (asm_ctx->verbose)
                     {
                         printf("DEBUG: Adding relocation for external symbol '%s' at offset 0x%X in section %d, type R_386_PC32\n",
                                symbol->name, offset_in_section + 1, section_type); // +1 to point to displacement field
                     }
-                    
+
                     // Add relocation entry pointing to the displacement field (after opcode)
                     relocation_add(asm_ctx, offset_in_section + 1, symbol->name, relocation_type, section_type);
                 }
@@ -1462,7 +1466,8 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
         if (target_available)
         {
             // Calculate relative displacement
-            uint32_t current_addr = codegen_get_current_address(asm_ctx);            if (def->opcode == 0xE8)
+            uint32_t current_addr = codegen_get_current_address(asm_ctx);
+            if (def->opcode == 0xE8)
             { // CALL rel - size depends on mode
                 uint32_t instruction_size;
                 if (asm_ctx->mode == MODE_32BIT)
@@ -1473,7 +1478,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 {
                     instruction_size = 3; // 16-bit mode: opcode + 16-bit displacement
                 }
-                
+
                 int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);
 
                 // Handle the case where target equals current address (call to next instruction)
@@ -1610,7 +1615,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             return true;
         }
         else
-        {            // Target not available - need to estimate instruction size conservatively
+        { // Target not available - need to estimate instruction size conservatively
             // Use consistent size estimates across all passes to avoid cascading changes
             if (def->opcode == 0xE8)
             {
@@ -1620,7 +1625,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 {
                     // 32-bit mode: emit 32-bit displacement placeholder (5 bytes total)
                     buffer[1] = 0x00; // Placeholder displacement byte 1
-                    buffer[2] = 0x00; // Placeholder displacement byte 2  
+                    buffer[2] = 0x00; // Placeholder displacement byte 2
                     buffer[3] = 0x00; // Placeholder displacement byte 3
                     buffer[4] = 0x00; // Placeholder displacement byte 4
                     *size = 5;
@@ -1687,7 +1692,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             }
             return true;
         }
-    }    // Default case with placeholder - use same logic as when target not available
+    } // Default case with placeholder - use same logic as when target not available
     if (def->opcode == 0xE8)
     {
         // CALL instruction - size depends on mode
@@ -1696,7 +1701,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
         {
             // 32-bit mode: emit 32-bit displacement placeholder (5 bytes total)
             buffer[1] = 0x00; // Placeholder displacement byte 1
-            buffer[2] = 0x00; // Placeholder displacement byte 2  
+            buffer[2] = 0x00; // Placeholder displacement byte 2
             buffer[3] = 0x00; // Placeholder displacement byte 3
             buffer[4] = 0x00; // Placeholder displacement byte 4
             *size = 5;
@@ -2394,12 +2399,12 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
     }
     // Use a temporary buffer for the main instruction, then copy to final buffer with prefix
     uint8_t temp_buffer[16];
-    size_t temp_size = 0;    // Handle far pointer calls and jumps: jmp seg:off, call seg:off
+    size_t temp_size = 0; // Handle far pointer calls and jumps: jmp seg:off, call seg:off
     if (instr->operand_count == 1 && instr->operands[0].type == OPERAND_FARPTR)
     {
         uint16_t offset = instr->operands[0].value.far_ptr.offset;
         uint16_t segment = instr->operands[0].value.far_ptr.segment;
-        
+
         // If offset is a label, resolve it
         if (instr->operands[0].value.far_ptr.has_label_offset)
         {
@@ -2414,7 +2419,7 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                 offset = 0;
             }
         }
-        
+
         if (strcasecmp(instr->mnemonic, "jmp") == 0)
         {
             temp_buffer[0] = 0xEA; // FAR JMP ptr16:16
@@ -2531,7 +2536,7 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             }
         }
         return false; // Unsupported MOV combination
-    }    // Handle PUSH instruction with different operand types
+    } // Handle PUSH instruction with different operand types
     if (strcasecmp(instr->mnemonic, "push") == 0)
     {
         if (instr->operand_count == 1)
@@ -2540,13 +2545,39 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             if (instr->operands[0].type == OPERAND_REGISTER)
             {
                 result = encode_push_reg(instr, temp_buffer, &temp_size);
-            }            else if (instr->operands[0].type == OPERAND_IMMEDIATE)
+            }
+            else if (instr->operands[0].type == OPERAND_IMMEDIATE)
             {
                 result = encode_push_imm(instr, temp_buffer, &temp_size, asm_ctx);
             }
             else if (instr->operands[0].type == OPERAND_MEMORY)
             {
                 result = encode_push_mem(instr, temp_buffer, &temp_size, asm_ctx);
+            }
+            else if (instr->operands[0].type == OPERAND_LABEL)
+            {
+                // Handle external symbol labels - generate push imm32 with R_386_32 relocation
+                symbol_t *symbol = symbol_lookup(asm_ctx, instr->operands[0].value.label);
+                if (symbol && symbol->external)
+                {
+                    // Generate push imm32 instruction (opcode 0x68)
+                    temp_buffer[0] = 0x68;
+                    temp_buffer[1] = 0x00; // Placeholder for 32-bit immediate
+                    temp_buffer[2] = 0x00;
+                    temp_buffer[3] = 0x00;
+                    temp_buffer[4] = 0x00;
+                    temp_size = 5;
+
+                    // Get current section for relocation
+                    section_t *current_section = section_get_current(asm_ctx);
+                    section_type_t section_type = current_section ? current_section->type : SECTION_TEXT;
+                    uint32_t section_offset = asm_ctx->current_address - (current_section ? current_section->address : 0);
+
+                    // Add R_386_32 relocation for absolute addressing (pointing to immediate field after opcode)
+                    relocation_add(asm_ctx, section_offset + prefix_size + 1,
+                                   instr->operands[0].value.label, R_386_32, section_type);
+                    result = true;
+                }
             }
 
             if (result)
@@ -2558,7 +2589,7 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             }
         }
         return false; // Unsupported PUSH combination
-    }// Handle arithmetic instructions (ADD, SUB, XOR, CMP, AND, OR, ADC, SBB, TEST) with different operand combinations
+    } // Handle arithmetic instructions (ADD, SUB, XOR, CMP, AND, OR, ADC, SBB, TEST) with different operand combinations
     if (strcasecmp(instr->mnemonic, "add") == 0 ||
         strcasecmp(instr->mnemonic, "sub") == 0 ||
         strcasecmp(instr->mnemonic, "xor") == 0 ||
@@ -2633,7 +2664,8 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
     {
     case ENC_SINGLE:
         result = encode_single_byte(instr, temp_buffer, &temp_size);
-        break;    case ENC_POP_REG:
+        break;
+    case ENC_POP_REG:
         result = encode_pop_reg(instr, temp_buffer, &temp_size);
         break;
     case ENC_PUSH_MEM:

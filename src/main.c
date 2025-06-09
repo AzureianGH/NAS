@@ -19,7 +19,8 @@ void print_version()
 void print_usage(const char *program_name)
 {
     printf("Usage: %s [options] input_file -o output_file\n", program_name);
-    printf("Options:\n");    printf("  -m, --mode <mode>      Assembly mode (16 or 32, default: 16)\n");
+    printf("Options:\n");
+    printf("  -m, --mode <mode>      Assembly mode (16 or 32, default: 16)\n");
     printf("  -f, --format <format>  Output format (bin, hex, elf, default: bin)\n");
     printf("                         Note: elf format only available in 32-bit mode\n");
     printf("  -o, --output <file>    Output file\n");
@@ -34,7 +35,8 @@ void print_usage(const char *program_name)
 }
 
 int main(int argc, char *argv[])
-{    char *input_file = NULL;
+{
+    char *input_file = NULL;
     char *output_file = NULL;
     asm_mode_t mode = MODE_16BIT;
     output_format_t format = FORMAT_BIN;
@@ -49,15 +51,19 @@ int main(int argc, char *argv[])
         {"bit-change", no_argument, 0, 1}, // Using numeric value for -bc
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 0},
-        {0, 0, 0, 0}};    int c;
+        {0, 0, 0, 0}};
+    int c;
     int option_index = 0;
-    
+
     // Check for -bc flag before getopt parsing
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-bc") == 0) {
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "-bc") == 0)
+        {
             bit_change_allowed = true;
             // Remove this argument from argv to avoid getopt confusion
-            for (int j = i; j < argc - 1; j++) {
+            for (int j = i; j < argc - 1; j++)
+            {
                 argv[j] = argv[j + 1];
             }
             argc--;
@@ -83,7 +89,8 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "Error: Invalid mode '%s'. Use 16 or 32.\n", optarg);
                 return 1;
             }
-            break;        case 'f':
+            break;
+        case 'f':
             if (strcmp(optarg, "bin") == 0)
             {
                 format = FORMAT_BIN;
@@ -105,7 +112,8 @@ int main(int argc, char *argv[])
 
         case 'o':
             output_file = optarg;
-            break;        case 'v':
+            break;
+        case 'v':
             verbose = true;
             break;
 
@@ -137,7 +145,7 @@ int main(int argc, char *argv[])
     if (optind < argc)
     {
         input_file = argv[optind];
-    }    // Validate arguments
+    } // Validate arguments
     if (!input_file)
     {
         fprintf(stderr, "Error: No input file specified.\n");
@@ -165,11 +173,12 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Error: Failed to create assembler.\n");
         return 1;
-    }    // Configure assembler
+    } // Configure assembler
     assembler_set_cmdline_mode(asm_ctx, mode);
     assembler_set_format(asm_ctx, format);
     asm_ctx->verbose = verbose;
-    asm_ctx->bit_change_allowed = bit_change_allowed;if (verbose)
+    asm_ctx->bit_change_allowed = bit_change_allowed;
+    if (verbose)
     {
         printf("NAS - Nathan's Assembler\n");
         printf("Input file: %s\n", input_file);

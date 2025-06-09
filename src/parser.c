@@ -223,7 +223,7 @@ operand_t parser_parse_operand(parser_t *parser)
     {
         explicit_size = 32;
         parser_advance(parser);
-    }    // Check for far pointer literal: segment:offset
+    } // Check for far pointer literal: segment:offset
     token_t next = lexer_peek_token(parser->lexer);
     if (parser->current_token.type == TOKEN_IMMEDIATE && next.type == TOKEN_COLON)
     {
@@ -249,14 +249,14 @@ operand_t parser_parse_operand(parser_t *parser)
             operand.type = OPERAND_FARPTR;
             operand.value.far_ptr.segment = (uint16_t)segment;
             operand.value.far_ptr.has_label_offset = true;
-            
+
             // Store label name for later resolution
             strncpy(operand.value.far_ptr.offset_label, parser->current_token.value, MAX_LABEL_LENGTH - 1);
             operand.value.far_ptr.offset_label[MAX_LABEL_LENGTH - 1] = '\0';
-            
+
             // Register this label as being referenced
             symbol_reference(parser->assembler, parser->current_token.value);
-            
+
             parser_advance(parser);
             operand.size = 32;
             return operand;
@@ -294,17 +294,18 @@ operand_t parser_parse_operand(parser_t *parser)
         {
             operand.size = explicit_size;
         }
-        break;    case TOKEN_LABEL:        // Check if this is a defined symbol (like from #define)
+        break;
+    case TOKEN_LABEL: // Check if this is a defined symbol (like from #define)
         symbol_t *symbol = symbol_lookup(parser->assembler, parser->current_token.value);
         if (symbol && symbol->defined)
         {
             // Convert defined symbol to immediate operand
             operand.type = OPERAND_IMMEDIATE;
-            
+
             // For relocatable ELF objects, use relative addresses that will be resolved by the linker
             // For other formats, use the address as-is
             operand.value.immediate = (int32_t)symbol->address;
-            
+
             operand.size = explicit_size ? explicit_size : 16; // Default to 16-bit
         }
         else
@@ -373,11 +374,12 @@ bool parser_parse_directive(parser_t *parser)
                 assembler_error(parser->assembler, "Invalid width value %d at line %d. Must be 16 or 32",
                                 width, parser->current_token.line);
                 return false;
-            }            asm_mode_t directive_mode = (width == 32) ? MODE_32BIT : MODE_16BIT;
+            }
+            asm_mode_t directive_mode = (width == 32) ? MODE_32BIT : MODE_16BIT;
 
             // Check for conflict with command line mode if both are set and bit change is not allowed
-            if (parser->assembler->cmdline_mode_set && 
-                parser->assembler->cmdline_mode != directive_mode && 
+            if (parser->assembler->cmdline_mode_set &&
+                parser->assembler->cmdline_mode != directive_mode &&
                 !parser->assembler->bit_change_allowed)
             {
                 assembler_error(parser->assembler, "Conflict of interest: #width %d directive at line %d conflicts with command line flag -m%d. Use -bc flag to allow bit width changes",
@@ -393,7 +395,7 @@ bool parser_parse_directive(parser_t *parser)
             assembler_error(parser->assembler, "Expected immediate value after #width directive at line %d",
                             parser->current_token.line);
             return false;
-        }    // Handle db (define byte) directive    
+        } // Handle db (define byte) directive
     }
     else if (strcmp(directive, "#db") == 0)
     {
@@ -444,7 +446,7 @@ bool parser_parse_directive(parser_t *parser)
             }
         } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
 
-    // Handle dw (define word) directive
+        // Handle dw (define word) directive
     }
     else if (strcmp(directive, "#dw") == 0)
     {
@@ -474,7 +476,8 @@ bool parser_parse_directive(parser_t *parser)
             else
             {
                 break; // No more values
-            }        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);        // Handle dd (define dword) directive
+            }
+        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF); // Handle dd (define dword) directive
     }
     else if (strcmp(directive, "#dd") == 0)
     {
@@ -615,7 +618,8 @@ bool parser_parse_directive(parser_t *parser)
                 {
                     assembler_error(parser->assembler, "Expected immediate value after #dw in #times directive at line %d",
                                     parser->current_token.line);
-                    return false;                }
+                    return false;
+                }
             }
             else if (strcmp(data_directive, "#dd") == 0)
             {
@@ -652,11 +656,13 @@ bool parser_parse_directive(parser_t *parser)
         {
             assembler_error(parser->assembler, "Expected data directive (#db, #dw, or #dd) after #times count at line %d",
                             parser->current_token.line);
-            return false;}
+            return false;
+        }
     }
     // Handle section directive
     else if (strcmp(directive, "#section") == 0)
-    {        if (parser->current_token.type == TOKEN_LABEL)
+    {
+        if (parser->current_token.type == TOKEN_LABEL)
         {
             char section_name[MAX_LABEL_LENGTH];
             strncpy(section_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
@@ -690,7 +696,7 @@ bool parser_parse_directive(parser_t *parser)
                     return false;
                 }
                 existing_section = new_section;
-            }            // Switch to the section
+            } // Switch to the section
             parser->assembler->current_section_ptr = existing_section;
         }
         else
@@ -699,7 +705,7 @@ bool parser_parse_directive(parser_t *parser)
                             parser->current_token.line);
             return false;
         }
-    }    // Handle resb directive (reserve bytes)
+    } // Handle resb directive (reserve bytes)
     else if (strcmp(directive, "#resb") == 0)
     {
         if (parser->current_token.type == TOKEN_IMMEDIATE)
@@ -714,7 +720,7 @@ bool parser_parse_directive(parser_t *parser)
 
             // Advance current address and update section size
             parser->assembler->current_address += count;
-            
+
             // Update current section size if we're in a section
             section_t *current_section = section_get_current(parser->assembler);
             if (current_section)
@@ -728,7 +734,7 @@ bool parser_parse_directive(parser_t *parser)
                             parser->current_token.line);
             return false;
         }
-    }    // Handle resw directive (reserve words)
+    } // Handle resw directive (reserve words)
     else if (strcmp(directive, "#resw") == 0)
     {
         if (parser->current_token.type == TOKEN_IMMEDIATE)
@@ -743,7 +749,7 @@ bool parser_parse_directive(parser_t *parser)
 
             // Advance current address by count * 2 bytes and update section size
             parser->assembler->current_address += count * 2;
-            
+
             // Update current section size if we're in a section
             section_t *current_section = section_get_current(parser->assembler);
             if (current_section)
@@ -757,7 +763,7 @@ bool parser_parse_directive(parser_t *parser)
                             parser->current_token.line);
             return false;
         }
-    }    // Handle resd directive (reserve dwords)
+    } // Handle resd directive (reserve dwords)
     else if (strcmp(directive, "#resd") == 0)
     {
         if (parser->current_token.type == TOKEN_IMMEDIATE)
@@ -772,7 +778,7 @@ bool parser_parse_directive(parser_t *parser)
 
             // Advance current address by count * 4 bytes and update section size
             parser->assembler->current_address += count * 4;
-            
+
             // Update current section size if we're in a section
             section_t *current_section = section_get_current(parser->assembler);
             if (current_section)
@@ -784,7 +790,9 @@ bool parser_parse_directive(parser_t *parser)
         {
             assembler_error(parser->assembler, "Expected immediate value after #resd directive at line %d",
                             parser->current_token.line);
-            return false;        }    }
+            return false;
+        }
+    }
     // Handle global directive
     else if (strcmp(directive, "#global") == 0)
     {
@@ -796,16 +804,16 @@ bool parser_parse_directive(parser_t *parser)
                 char symbol_name[MAX_LABEL_LENGTH];
                 strncpy(symbol_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
                 symbol_name[MAX_LABEL_LENGTH - 1] = '\0';
-                
+
                 if (!symbol_mark_global(parser->assembler, symbol_name))
                 {
                     assembler_error(parser->assembler, "Failed to mark symbol '%s' as global at line %d",
                                     symbol_name, parser->current_token.line);
                     return false;
                 }
-                
+
                 parser_advance(parser); // consume symbol name
-                
+
                 // Check for comma to continue parsing more symbols
                 if (parser->current_token.type == TOKEN_COMMA)
                 {
@@ -835,16 +843,16 @@ bool parser_parse_directive(parser_t *parser)
                 char symbol_name[MAX_LABEL_LENGTH];
                 strncpy(symbol_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
                 symbol_name[MAX_LABEL_LENGTH - 1] = '\0';
-                
+
                 if (!symbol_mark_external(parser->assembler, symbol_name))
                 {
                     assembler_error(parser->assembler, "Failed to mark symbol '%s' as external at line %d",
                                     symbol_name, parser->current_token.line);
                     return false;
                 }
-                
+
                 parser_advance(parser); // consume symbol name
-                
+
                 // Check for comma to continue parsing more symbols
                 if (parser->current_token.type == TOKEN_COMMA)
                 {
@@ -860,7 +868,8 @@ bool parser_parse_directive(parser_t *parser)
                 assembler_error(parser->assembler, "Expected symbol name in #extern directive at line %d",
                                 parser->current_token.line);
                 return false;
-            }        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
+            }
+        } while (parser->current_token.type != TOKEN_NEWLINE && parser->current_token.type != TOKEN_EOF);
     }
     // Handle extend directive (similar to extern but for extending/importing symbols)
     else if (strcmp(directive, "#extend") == 0)
@@ -873,16 +882,16 @@ bool parser_parse_directive(parser_t *parser)
                 char symbol_name[MAX_LABEL_LENGTH];
                 strncpy(symbol_name, parser->current_token.value, MAX_LABEL_LENGTH - 1);
                 symbol_name[MAX_LABEL_LENGTH - 1] = '\0';
-                
+
                 if (!symbol_mark_external(parser->assembler, symbol_name))
                 {
                     assembler_error(parser->assembler, "Failed to mark symbol '%s' as extended/external at line %d",
                                     symbol_name, parser->current_token.line);
                     return false;
                 }
-                
+
                 parser_advance(parser); // consume symbol name
-                
+
                 // Check for comma to continue parsing more symbols
                 if (parser->current_token.type == TOKEN_COMMA)
                 {
@@ -946,7 +955,8 @@ bool parser_parse_line(parser_t *parser, instruction_t *instruction)
     // Handle labels
     if (parser->current_token.type == TOKEN_LABEL)
     {
-        token_t next = lexer_peek_token(parser->lexer);        if (next.type != TOKEN_INSTRUCTION)
+        token_t next = lexer_peek_token(parser->lexer);
+        if (next.type != TOKEN_INSTRUCTION)
         {
             // This is a label definition - define in all passes to allow address updates
             symbol_define(parser->assembler, parser->current_token.value,

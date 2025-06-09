@@ -675,8 +675,8 @@ token_t lexer_next_token(lexer_t *lexer)
         lexer->column += length;
         break;
     case '\'':
-        return lexer_read_character(lexer);    
-        case '"':
+        return lexer_read_character(lexer);
+    case '"':
         return lexer_read_string_literal(lexer);
 
     case '\\':

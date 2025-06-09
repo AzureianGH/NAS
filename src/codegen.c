@@ -67,7 +67,7 @@ bool codegen_ensure_capacity(assembler_t *asm_ctx, size_t additional_size)
 }
 
 bool codegen_emit_byte(assembler_t *asm_ctx, uint8_t byte)
-{    
+{
     // Always advance address
     asm_ctx->current_address++;
 
@@ -75,7 +75,7 @@ bool codegen_emit_byte(assembler_t *asm_ctx, uint8_t byte)
     if (asm_ctx->pass >= 2)
     {
         section_t *current_section = section_get_current(asm_ctx);
-        
+
         if (current_section)
         {
             // Emit to current section
@@ -100,7 +100,7 @@ bool codegen_emit_byte(assembler_t *asm_ctx, uint8_t byte)
 }
 
 bool codegen_emit_word(assembler_t *asm_ctx, uint16_t word)
-{    
+{
     // Always advance address
     asm_ctx->current_address += 2;
 
@@ -108,7 +108,7 @@ bool codegen_emit_word(assembler_t *asm_ctx, uint16_t word)
     if (asm_ctx->pass >= 2)
     {
         section_t *current_section = section_get_current(asm_ctx);
-        
+
         if (current_section)
         {
             // Emit to current section
@@ -137,7 +137,7 @@ bool codegen_emit_word(assembler_t *asm_ctx, uint16_t word)
 }
 
 bool codegen_emit_dword(assembler_t *asm_ctx, uint32_t dword)
-{    
+{
     // Always advance address
     asm_ctx->current_address += 4;
 
@@ -145,7 +145,7 @@ bool codegen_emit_dword(assembler_t *asm_ctx, uint32_t dword)
     if (asm_ctx->pass >= 2)
     {
         section_t *current_section = section_get_current(asm_ctx);
-        
+
         if (current_section)
         {
             // Emit to current section
@@ -178,7 +178,7 @@ bool codegen_emit_dword(assembler_t *asm_ctx, uint32_t dword)
 }
 
 bool codegen_emit_bytes(assembler_t *asm_ctx, const uint8_t *bytes, size_t count)
-{    
+{
     // Always advance address
     asm_ctx->current_address += count;
 
@@ -186,7 +186,7 @@ bool codegen_emit_bytes(assembler_t *asm_ctx, const uint8_t *bytes, size_t count
     if (asm_ctx->pass >= 2)
     {
         section_t *current_section = section_get_current(asm_ctx);
-        
+
         if (current_section)
         {
             // Emit to current section

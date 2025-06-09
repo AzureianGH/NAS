@@ -8,7 +8,7 @@ assembler_t *assembler_create(void)
     if (!asm_ctx)
         return NULL;
 
-    memset(asm_ctx, 0, sizeof(assembler_t));    // Default settings
+    memset(asm_ctx, 0, sizeof(assembler_t)); // Default settings
     asm_ctx->mode = MODE_16BIT;
     asm_ctx->cmdline_mode = MODE_16BIT;
     asm_ctx->cmdline_mode_set = false;
@@ -26,10 +26,10 @@ assembler_t *assembler_create(void)
     {
         free(asm_ctx);
         return NULL;
-    }    // Initialize sections
+    } // Initialize sections
     asm_ctx->sections = NULL;
     asm_ctx->current_section_ptr = NULL;
-    
+
     // Initialize relocations
     asm_ctx->relocations = NULL;
 
@@ -132,7 +132,7 @@ void symbol_table_dump(assembler_t *asm_ctx)
     {
         const char *status_color = current->defined ? defined_color : undefined_color;
         const char *status_text = current->defined ? "DEFINED" : "UNDEFINED";
-        
+
         printf("|%s%3d%s | %s%-21.21s%s | %s0x%08X%s | %s%-21s%s|\n",
                header_color, ++count, reset_color,
                name_color, current->name, reset_color,
@@ -140,13 +140,13 @@ void symbol_table_dump(assembler_t *asm_ctx)
                status_color, status_text, reset_color);
         current = current->next;
     }
-    
+
     if (count == 0)
     {
-        printf("|    | %s(no symbols)%s        |           |                       |\n", 
+        printf("|    | %s(no symbols)%s        |           |                       |\n",
                undefined_color, reset_color);
     }
-    
+
     printf("%s+====+=======================+============+======================+%s\n", header_color, reset_color);
     printf("%sTotal symbols: %d%s\n\n", header_color, count, reset_color);
 }
@@ -173,7 +173,7 @@ bool symbol_define(assembler_t *asm_ctx, const char *name, uint32_t address)
         if (existing->defined && asm_ctx->pass == 1)
         {
             return false; // Symbol already defined in same pass
-        }        // Allow redefinition in subsequent passes for address updates
+        } // Allow redefinition in subsequent passes for address updates
         existing->address = address;
         existing->defined = true;
         existing->section = asm_ctx->current_section_ptr ? asm_ctx->current_section_ptr->type : SECTION_TEXT;
@@ -185,7 +185,8 @@ bool symbol_define(assembler_t *asm_ctx, const char *name, uint32_t address)
         return false;
 
     strncpy(new_symbol->name, name, MAX_LABEL_LENGTH - 1);
-    new_symbol->name[MAX_LABEL_LENGTH - 1] = '\0';    new_symbol->address = address;
+    new_symbol->name[MAX_LABEL_LENGTH - 1] = '\0';
+    new_symbol->address = address;
     new_symbol->defined = true;
     new_symbol->section = asm_ctx->current_section_ptr ? asm_ctx->current_section_ptr->type : SECTION_TEXT;
     new_symbol->next = asm_ctx->symbols;
@@ -214,9 +215,10 @@ bool symbol_reference(assembler_t *asm_ctx, const char *name)
         return false;
 
     strncpy(new_symbol->name, name, MAX_LABEL_LENGTH - 1);
-    new_symbol->name[MAX_LABEL_LENGTH - 1] = '\0';    new_symbol->address = 0;
+    new_symbol->name[MAX_LABEL_LENGTH - 1] = '\0';
+    new_symbol->address = 0;
     new_symbol->defined = false;
-    new_symbol->section = SECTION_TEXT;  // Default section for undefined symbols
+    new_symbol->section = SECTION_TEXT; // Default section for undefined symbols
     new_symbol->next = asm_ctx->symbols;
     asm_ctx->symbols = new_symbol;
 
@@ -258,7 +260,7 @@ bool symbol_check_undefined(assembler_t *asm_ctx)
         while (current)
         {
             fprintf(stderr, "  %s -> 0x%04X (defined=%s, external=%s)\n",
-                    current->name, current->address, 
+                    current->name, current->address,
                     current->defined ? "yes" : "no",
                     current->external ? "yes" : "no");
             current = current->next;
@@ -277,12 +279,12 @@ bool output_write_binary(assembler_t *asm_ctx)
 
     // For binary output, concatenate all sections in order: .text, .data, .bss
     section_type_t section_order[] = {SECTION_TEXT, SECTION_DATA, SECTION_BSS};
-    
+
     for (int i = 0; i < 3; i++)
     {
         section_type_t type = section_order[i];
         section_t *current = asm_ctx->sections;
-        
+
         while (current)
         {
             if (current->type == type && current->size > 0)
@@ -319,12 +321,12 @@ bool output_write_hex(assembler_t *asm_ctx)
     // For hex output, concatenate all sections in order: .text, .data, .bss
     section_type_t section_order[] = {SECTION_TEXT, SECTION_DATA, SECTION_BSS};
     size_t bytes_written = 0;
-    
+
     for (int i = 0; i < 3; i++)
     {
         section_type_t type = section_order[i];
         section_t *current = asm_ctx->sections;
-        
+
         while (current)
         {
             if (current->type == type && current->size > 0)
@@ -369,124 +371,129 @@ bool output_write_hex(assembler_t *asm_ctx)
 }
 
 // ELF32 structures for generating Linux-compatible executables
-typedef struct {
-    uint8_t e_ident[16];     // ELF identification
-    uint16_t e_type;         // Object file type
-    uint16_t e_machine;      // Architecture
-    uint32_t e_version;      // Object file version
-    uint32_t e_entry;        // Entry point virtual address
-    uint32_t e_phoff;        // Program header table file offset
-    uint32_t e_shoff;        // Section header table file offset
-    uint32_t e_flags;        // Processor-specific flags
-    uint16_t e_ehsize;       // ELF header size in bytes
-    uint16_t e_phentsize;    // Program header table entry size
-    uint16_t e_phnum;        // Program header table entry count
-    uint16_t e_shentsize;    // Section header table entry size
-    uint16_t e_shnum;        // Section header table entry count
-    uint16_t e_shstrndx;     // Section header string table index
+typedef struct
+{
+    uint8_t e_ident[16];  // ELF identification
+    uint16_t e_type;      // Object file type
+    uint16_t e_machine;   // Architecture
+    uint32_t e_version;   // Object file version
+    uint32_t e_entry;     // Entry point virtual address
+    uint32_t e_phoff;     // Program header table file offset
+    uint32_t e_shoff;     // Section header table file offset
+    uint32_t e_flags;     // Processor-specific flags
+    uint16_t e_ehsize;    // ELF header size in bytes
+    uint16_t e_phentsize; // Program header table entry size
+    uint16_t e_phnum;     // Program header table entry count
+    uint16_t e_shentsize; // Section header table entry size
+    uint16_t e_shnum;     // Section header table entry count
+    uint16_t e_shstrndx;  // Section header string table index
 } __attribute__((packed)) Elf32_Ehdr;
 
-typedef struct {
-    uint32_t p_type;         // Segment type
-    uint32_t p_offset;       // Segment file offset
-    uint32_t p_vaddr;        // Segment virtual address
-    uint32_t p_paddr;        // Segment physical address
-    uint32_t p_filesz;       // Segment size in file
-    uint32_t p_memsz;        // Segment size in memory
-    uint32_t p_flags;        // Segment flags
-    uint32_t p_align;        // Segment alignment
+typedef struct
+{
+    uint32_t p_type;   // Segment type
+    uint32_t p_offset; // Segment file offset
+    uint32_t p_vaddr;  // Segment virtual address
+    uint32_t p_paddr;  // Segment physical address
+    uint32_t p_filesz; // Segment size in file
+    uint32_t p_memsz;  // Segment size in memory
+    uint32_t p_flags;  // Segment flags
+    uint32_t p_align;  // Segment alignment
 } __attribute__((packed)) Elf32_Phdr;
 
 // ELF constants
-#define EI_MAG0     0
-#define EI_MAG1     1
-#define EI_MAG2     2
-#define EI_MAG3     3
-#define EI_CLASS    4
-#define EI_DATA     5
-#define EI_VERSION  6
-#define EI_OSABI    7
-#define EI_PAD      8
+#define EI_MAG0 0
+#define EI_MAG1 1
+#define EI_MAG2 2
+#define EI_MAG3 3
+#define EI_CLASS 4
+#define EI_DATA 5
+#define EI_VERSION 6
+#define EI_OSABI 7
+#define EI_PAD 8
 
-#define ELFMAG0     0x7f
-#define ELFMAG1     'E'
-#define ELFMAG2     'L'
-#define ELFMAG3     'F'
-#define ELFCLASS32  1
+#define ELFMAG0 0x7f
+#define ELFMAG1 'E'
+#define ELFMAG2 'L'
+#define ELFMAG3 'F'
+#define ELFCLASS32 1
 #define ELFDATA2LSB 1
-#define EV_CURRENT  1
+#define EV_CURRENT 1
 #define ELFOSABI_SYSV 0
 
-#define ET_REL      1      // Relocatable object file
-#define ET_EXEC     2      // Executable file
-#define EM_386      3      // Intel 80386
-#define PT_LOAD     1      // Loadable segment
-#define PF_X        1      // Execute
-#define PF_W        2      // Write
-#define PF_R        4      // Read
+#define ET_REL 1  // Relocatable object file
+#define ET_EXEC 2 // Executable file
+#define EM_386 3  // Intel 80386
+#define PT_LOAD 1 // Loadable segment
+#define PF_X 1    // Execute
+#define PF_W 2    // Write
+#define PF_R 4    // Read
 
 // Section header types
-#define SHT_NULL     0     // Section header table entry unused
-#define SHT_PROGBITS 1     // Program data
-#define SHT_SYMTAB   2     // Symbol table
-#define SHT_STRTAB   3     // String table
-#define SHT_REL      9     // Relocation entries, no addends
-#define SHT_NOBITS   8     // Program space with no data (bss)
+#define SHT_NULL 0     // Section header table entry unused
+#define SHT_PROGBITS 1 // Program data
+#define SHT_SYMTAB 2   // Symbol table
+#define SHT_STRTAB 3   // String table
+#define SHT_REL 9      // Relocation entries, no addends
+#define SHT_NOBITS 8   // Program space with no data (bss)
 
 // Section header flags
-#define SHF_WRITE    0x1   // Writable
-#define SHF_ALLOC    0x2   // Occupies memory during execution
-#define SHF_EXECINSTR 0x4  // Executable
+#define SHF_WRITE 0x1     // Writable
+#define SHF_ALLOC 0x2     // Occupies memory during execution
+#define SHF_EXECINSTR 0x4 // Executable
 
 // Special section indices
-#define SHN_UNDEF    0     // Undefined section
-#define SHN_ABS      0xfff1 // Absolute values
+#define SHN_UNDEF 0    // Undefined section
+#define SHN_ABS 0xfff1 // Absolute values
 
 // Symbol binding
-#define STB_LOCAL   0      // Local symbol
-#define STB_GLOBAL  1      // Global symbol
-#define STB_WEAK    2      // Weak symbol
+#define STB_LOCAL 0  // Local symbol
+#define STB_GLOBAL 1 // Global symbol
+#define STB_WEAK 2   // Weak symbol
 
 // Symbol types
-#define STT_NOTYPE  0      // Symbol type not specified
-#define STT_OBJECT  1      // Symbol is a data object
-#define STT_FUNC    2      // Symbol is a code object
-#define STT_SECTION 3      // Symbol associated with a section
-#define STT_FILE    4      // Symbol's name is file name
+#define STT_NOTYPE 0  // Symbol type not specified
+#define STT_OBJECT 1  // Symbol is a data object
+#define STT_FUNC 2    // Symbol is a code object
+#define STT_SECTION 3 // Symbol associated with a section
+#define STT_FILE 4    // Symbol's name is file name
 
 // Macro to combine symbol binding and type
 #define ELF32_ST_INFO(bind, type) (((bind) << 4) + ((type) & 0xf))
 
 // i386 relocation types
-#define R_386_NONE      0      // No reloc
-#define R_386_32        1      // Direct 32 bit  
-#define R_386_PC32      2      // PC relative 32 bit
+#define R_386_NONE 0 // No reloc
+#define R_386_32 1   // Direct 32 bit
+#define R_386_PC32 2 // PC relative 32 bit
 
 // ELF relocation entry
-typedef struct {
-    uint32_t r_offset;     // Location (file offset, or vaddr) to apply the action
-    uint32_t r_info;       // Relocation type and symbol index
+typedef struct
+{
+    uint32_t r_offset; // Location (file offset, or vaddr) to apply the action
+    uint32_t r_info;   // Relocation type and symbol index
 } __attribute__((packed)) Elf32_Rel;
 
 // Macro to extract symbol index from r_info
-#define ELF32_R_SYM(i)    ((i) >> 8)
-// Macro to extract relocation type from r_info  
-#define ELF32_R_TYPE(i)   ((unsigned char)(i))
+#define ELF32_R_SYM(i) ((i) >> 8)
+// Macro to extract relocation type from r_info
+#define ELF32_R_TYPE(i) ((unsigned char)(i))
 // Macro to combine symbol index and relocation type
-#define ELF32_R_INFO(s,t) (((s) << 8) + (unsigned char)(t))
+#define ELF32_R_INFO(s, t) (((s) << 8) + (unsigned char)(t))
 
 // ELF symbol table entry
-typedef struct {
-    uint32_t st_name;      // Symbol name (string table index)
-    uint32_t st_value;     // Symbol value
-    uint32_t st_size;      // Symbol size
-    uint8_t st_info;       // Symbol type and binding
-    uint8_t st_other;      // Symbol visibility
-    uint16_t st_shndx;     // Section index
+typedef struct
+{
+    uint32_t st_name;  // Symbol name (string table index)
+    uint32_t st_value; // Symbol value
+    uint32_t st_size;  // Symbol size
+    uint8_t st_info;   // Symbol type and binding
+    uint8_t st_other;  // Symbol visibility
+    uint16_t st_shndx; // Section index
 } __attribute__((packed)) Elf32_Sym;
 
 // Section header structure
-typedef struct {
+typedef struct
+{
     uint32_t sh_name;      // Section name (string table index)
     uint32_t sh_type;      // Section type
     uint32_t sh_flags;     // Section flags
@@ -516,7 +523,7 @@ bool output_write_elf(assembler_t *asm_ctx)
         if (current->size > 0)
             section_count++;
         current = current->next;
-    }    // Calculate symbol counts
+    } // Calculate symbol counts
     int symbol_count = 2; // Start with 2 for the null symbol and FILE symbol
     symbol_t *sym = asm_ctx->symbols;
     while (sym)
@@ -529,12 +536,12 @@ bool output_write_elf(assembler_t *asm_ctx)
     char *strtab = malloc(4096); // Generous buffer
     if (!strtab)
         return false;
-      uint32_t strtab_offset = 1; // Start after null byte
-    strtab[0] = '\0'; // Null string at offset 0
-      // Add filename to string table for FILE symbol
+    uint32_t strtab_offset = 1; // Start after null byte
+    strtab[0] = '\0';           // Null string at offset 0
+                                // Add filename to string table for FILE symbol
     uint32_t filename_offset = strtab_offset;
     const char *full_filename = asm_ctx->input_filename ? asm_ctx->input_filename : "unknown.asm";
-    
+
     // Extract just the basename (filename without path) for FILE symbol
     const char *filename = full_filename;
     const char *last_slash = strrchr(full_filename, '/');
@@ -546,7 +553,7 @@ bool output_write_elf(assembler_t *asm_ctx)
         if (last_separator)
             filename = last_separator + 1;
     }
-    
+
     size_t filename_len = strlen(filename);
     if (strtab_offset + filename_len + 1 >= 4096)
     {
@@ -555,7 +562,7 @@ bool output_write_elf(assembler_t *asm_ctx)
     }
     strcpy(&strtab[strtab_offset], filename);
     strtab_offset += filename_len + 1;
-    
+
     // Build symbol name offset table
     uint32_t *symbol_name_offsets = malloc(symbol_count * sizeof(uint32_t));
     if (!symbol_name_offsets)
@@ -563,7 +570,7 @@ bool output_write_elf(assembler_t *asm_ctx)
         free(strtab);
         return false;
     }
-    
+
     // Add all symbol names to string table and record their offsets
     sym = asm_ctx->symbols;
     int symbol_index = 1; // Start at 1 (skip null symbol)
@@ -582,7 +589,7 @@ bool output_write_elf(assembler_t *asm_ctx)
         symbol_index++;
         sym = sym->next;
     }
-      uint32_t strtab_size = strtab_offset;
+    uint32_t strtab_size = strtab_offset;
 
     // Count relocations by section to determine if we need .rel.text, .rel.data, etc.
     int text_relocations = 0, data_relocations = 0;
@@ -595,22 +602,24 @@ bool output_write_elf(assembler_t *asm_ctx)
             data_relocations++;
         reloc = reloc->next;
     }
-    
+
     // Count relocation sections needed
     int relocation_sections = 0;
-    if (text_relocations > 0) relocation_sections++;
-    if (data_relocations > 0) relocation_sections++;
+    if (text_relocations > 0)
+        relocation_sections++;
+    if (data_relocations > 0)
+        relocation_sections++;
 
     // Calculate section count: null + sections + .symtab + .strtab + .shstrtab + relocation sections
     int total_sections = section_count + 4 + relocation_sections;
-    
+
     // Calculate file layout
     uint32_t elf_header_size = sizeof(Elf32_Ehdr);
-    
+
     // Section data starts after ELF header
     uint32_t section_data_offset = elf_header_size;
     uint32_t current_offset = section_data_offset;
-    
+
     // Calculate section data offsets
     current = asm_ctx->sections;
     while (current)
@@ -621,39 +630,39 @@ bool output_write_elf(assembler_t *asm_ctx)
         }
         current = current->next;
     }
-    
+
     // Symbol table comes after section data
     uint32_t symtab_offset = current_offset;
     uint32_t symtab_size = symbol_count * sizeof(Elf32_Sym);
     current_offset += symtab_size;
-      // String table comes after symbol table
+    // String table comes after symbol table
     uint32_t strtab_file_offset = current_offset;
     current_offset += strtab_size;
-    
+
     // Relocation sections come after string table
     uint32_t rel_text_offset = 0, rel_data_offset = 0;
     uint32_t rel_text_size = 0, rel_data_size = 0;
-    
+
     if (text_relocations > 0)
     {
         rel_text_offset = current_offset;
         rel_text_size = text_relocations * sizeof(Elf32_Rel);
         current_offset += rel_text_size;
     }
-    
+
     if (data_relocations > 0)
     {
         rel_data_offset = current_offset;
         rel_data_size = data_relocations * sizeof(Elf32_Rel);
         current_offset += rel_data_size;
     }
-    
+
     // Section header string table comes after relocation sections
     uint32_t shstrtab_offset = current_offset;
     const char section_names[] = "\0.text\0.data\0.bss\0.symtab\0.strtab\0.shstrtab\0.rel.text\0.rel.data\0";
     uint32_t shstrtab_size = sizeof(section_names) - 1;
     current_offset += shstrtab_size;
-    
+
     // Section headers come last
     uint32_t section_headers_offset = current_offset;
 
@@ -667,16 +676,17 @@ bool output_write_elf(assembler_t *asm_ctx)
     ehdr.e_ident[EI_DATA] = ELFDATA2LSB;
     ehdr.e_ident[EI_VERSION] = EV_CURRENT;
     ehdr.e_ident[EI_OSABI] = ELFOSABI_SYSV;
-    
-    ehdr.e_type = ET_REL;           // Relocatable object file
+
+    ehdr.e_type = ET_REL; // Relocatable object file
     ehdr.e_machine = EM_386;
     ehdr.e_version = EV_CURRENT;
-    ehdr.e_entry = 0;               // No entry point for relocatable
-    ehdr.e_phoff = 0;               // No program headers for relocatable
+    ehdr.e_entry = 0; // No entry point for relocatable
+    ehdr.e_phoff = 0; // No program headers for relocatable
     ehdr.e_shoff = section_headers_offset;
     ehdr.e_flags = 0;
-    ehdr.e_ehsize = elf_header_size;    ehdr.e_phentsize = 0;           // No program headers
-    ehdr.e_phnum = 0;               // No program headers
+    ehdr.e_ehsize = elf_header_size;
+    ehdr.e_phentsize = 0; // No program headers
+    ehdr.e_phnum = 0;     // No program headers
     ehdr.e_shentsize = sizeof(Elf32_Shdr);
     ehdr.e_shnum = total_sections;
     // e_shstrndx will be set after section index calculation
@@ -691,12 +701,12 @@ bool output_write_elf(assembler_t *asm_ctx)
 
     // Write section data in order: .text, .data (skip .bss as it has no file data)
     section_type_t section_order[] = {SECTION_TEXT, SECTION_DATA};
-    
+
     for (int i = 0; i < 2; i++)
     {
         section_type_t type = section_order[i];
         current = asm_ctx->sections;
-        
+
         while (current)
         {
             if (current->type == type && current->size > 0 && current->data)
@@ -709,7 +719,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             }
             current = current->next;
         }
-    }    // Write symbol table
+    } // Write symbol table
     // First symbol is always null
     Elf32_Sym null_sym = {0};
     if (fwrite(&null_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
@@ -717,7 +727,7 @@ bool output_write_elf(assembler_t *asm_ctx)
         free(strtab);
         return false;
     }
-    
+
     // Second symbol is FILE symbol with source filename
     Elf32_Sym file_sym = {0};
     file_sym.st_name = filename_offset;
@@ -731,11 +741,11 @@ bool output_write_elf(assembler_t *asm_ctx)
         free(strtab);
         return false;
     }
-    
+
     // Write all symbols - local symbols first, then global symbols (ELF convention)
     sym = asm_ctx->symbols;
     symbol_index = 1; // Reset index for symbol table writing
-    
+
     // First pass: write local symbols
     while (sym)
     {
@@ -743,12 +753,12 @@ bool output_write_elf(assembler_t *asm_ctx)
         {
             Elf32_Sym elf_sym = {0};
             elf_sym.st_name = symbol_name_offsets[symbol_index]; // Use stored offset
-            elf_sym.st_value = sym->defined ? sym->address : 0; // Use actual symbol address
-            elf_sym.st_size = 0; // Size unknown for most symbols
-              // Determine symbol type and binding
+            elf_sym.st_value = sym->defined ? sym->address : 0;  // Use actual symbol address
+            elf_sym.st_size = 0;                                 // Size unknown for most symbols
+                                                                 // Determine symbol type and binding
             uint8_t bind = STB_LOCAL;
             uint8_t type = STT_NOTYPE; // Default type
-            
+
             // Try to determine if it's a function by looking at the section
             if (sym->section == SECTION_TEXT)
             {
@@ -758,10 +768,10 @@ bool output_write_elf(assembler_t *asm_ctx)
             {
                 type = STT_OBJECT;
             }
-            
+
             elf_sym.st_info = ELF32_ST_INFO(bind, type);
             elf_sym.st_other = 0;
-            
+
             // Set section index based on symbol section
             // External symbols should always be undefined (SHN_UNDEF)
             if (sym->external)
@@ -774,7 +784,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             }
             else if (sym->section == SECTION_DATA)
             {
-                elf_sym.st_shndx = 2; // .data is section 2  
+                elf_sym.st_shndx = 2; // .data is section 2
             }
             else if (sym->section == SECTION_BSS)
             {
@@ -784,7 +794,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             {
                 elf_sym.st_shndx = SHN_UNDEF; // Undefined section
             }
-            
+
             if (fwrite(&elf_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
             {
                 free(strtab);
@@ -795,7 +805,7 @@ bool output_write_elf(assembler_t *asm_ctx)
         symbol_index++;
         sym = sym->next;
     }
-    
+
     // Second pass: write global symbols
     sym = asm_ctx->symbols;
     symbol_index = 1; // Reset index
@@ -805,12 +815,12 @@ bool output_write_elf(assembler_t *asm_ctx)
         {
             Elf32_Sym elf_sym = {0};
             elf_sym.st_name = symbol_name_offsets[symbol_index]; // Use stored offset
-            elf_sym.st_value = sym->defined ? sym->address : 0; // Use actual symbol address
-            elf_sym.st_size = 0; // Size unknown for most symbols
-              // Determine symbol type and binding
+            elf_sym.st_value = sym->defined ? sym->address : 0;  // Use actual symbol address
+            elf_sym.st_size = 0;                                 // Size unknown for most symbols
+                                                                 // Determine symbol type and binding
             uint8_t bind = STB_GLOBAL;
             uint8_t type = STT_NOTYPE; // Default type
-            
+
             // Try to determine if it's a function by looking at the section
             if (sym->section == SECTION_TEXT)
             {
@@ -820,10 +830,10 @@ bool output_write_elf(assembler_t *asm_ctx)
             {
                 type = STT_OBJECT;
             }
-            
+
             elf_sym.st_info = ELF32_ST_INFO(bind, type);
             elf_sym.st_other = 0;
-            
+
             // Set section index based on symbol section
             // External symbols should always be undefined (SHN_UNDEF)
             if (sym->external)
@@ -836,7 +846,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             }
             else if (sym->section == SECTION_DATA)
             {
-                elf_sym.st_shndx = 2; // .data is section 2  
+                elf_sym.st_shndx = 2; // .data is section 2
             }
             else if (sym->section == SECTION_BSS)
             {
@@ -846,7 +856,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             {
                 elf_sym.st_shndx = SHN_UNDEF; // Undefined section
             }
-            
+
             if (fwrite(&elf_sym, sizeof(Elf32_Sym), 1, asm_ctx->output) != 1)
             {
                 free(strtab);
@@ -859,13 +869,13 @@ bool output_write_elf(assembler_t *asm_ctx)
     }
 
     // Clean up offset table
-    free(symbol_name_offsets);    // Write string table
+    free(symbol_name_offsets); // Write string table
     if (fwrite(strtab, 1, strtab_size, asm_ctx->output) != strtab_size)
     {
         free(strtab);
         return false;
     }
-    
+
     free(strtab);
 
     // Write relocation sections
@@ -880,10 +890,10 @@ bool output_write_elf(assembler_t *asm_ctx)
                 // Find symbol index for the symbol being relocated
                 symbol_t *sym = asm_ctx->symbols;
                 uint32_t symbol_index = 1; // Start after null symbol
-                
+
                 // Skip FILE symbol
                 symbol_index++;
-                
+
                 // Find the symbol
                 while (sym)
                 {
@@ -892,16 +902,16 @@ bool output_write_elf(assembler_t *asm_ctx)
                     symbol_index++;
                     sym = sym->next;
                 }
-                
+
                 if (sym)
                 {
                     Elf32_Rel rel_entry = {0};
                     rel_entry.r_offset = reloc->offset;
                     rel_entry.r_info = ELF32_R_INFO(symbol_index, reloc->relocation_type);
-                    
+
                     if (fwrite(&rel_entry, sizeof(Elf32_Rel), 1, asm_ctx->output) != 1)
                         return false;
-                        
+
                     if (asm_ctx->verbose)
                     {
                         printf("DEBUG: Wrote .rel.text entry: offset=0x%X, symbol_index=%d, type=%d\n",
@@ -912,7 +922,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             reloc = reloc->next;
         }
     }
-    
+
     if (data_relocations > 0)
     {
         // Write .rel.data relocation entries (similar logic as .rel.text)
@@ -924,10 +934,10 @@ bool output_write_elf(assembler_t *asm_ctx)
                 // Find symbol index for the symbol being relocated
                 symbol_t *sym = asm_ctx->symbols;
                 uint32_t symbol_index = 1; // Start after null symbol
-                
+
                 // Skip FILE symbol
                 symbol_index++;
-                
+
                 // Find the symbol
                 while (sym)
                 {
@@ -936,16 +946,16 @@ bool output_write_elf(assembler_t *asm_ctx)
                     symbol_index++;
                     sym = sym->next;
                 }
-                
+
                 if (sym)
                 {
                     Elf32_Rel rel_entry = {0};
                     rel_entry.r_offset = reloc->offset;
                     rel_entry.r_info = ELF32_R_INFO(symbol_index, reloc->relocation_type);
-                    
+
                     if (fwrite(&rel_entry, sizeof(Elf32_Rel), 1, asm_ctx->output) != 1)
                         return false;
-                        
+
                     if (asm_ctx->verbose)
                     {
                         printf("DEBUG: Wrote .rel.data entry: offset=0x%X, symbol_index=%d, type=%d\n",
@@ -962,24 +972,24 @@ bool output_write_elf(assembler_t *asm_ctx)
         return false;
 
     // Write section headers
-    
+
     // 1. NULL section header (index 0)
     Elf32_Shdr null_shdr = {0};
     if (fwrite(&null_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
         return false;
 
     // 2. Section headers for actual sections
-    uint32_t file_offset = section_data_offset;    // String table offsets: \0.text\0.data\0.bss\0.symtab\0.strtab\0.shstrtab\0.rel.text\0.rel.data\0
+    uint32_t file_offset = section_data_offset; // String table offsets: \0.text\0.data\0.bss\0.symtab\0.strtab\0.shstrtab\0.rel.text\0.rel.data\0
     //                       0 1     7 13   18 26     34 44        54
-    uint32_t text_name_offset = 1;     // ".text"
-    uint32_t data_name_offset = 7;     // ".data" 
-    uint32_t bss_name_offset = 13;     // ".bss"
-    uint32_t symtab_name_offset = 18;  // ".symtab"
-    uint32_t strtab_name_offset = 26;  // ".strtab"
+    uint32_t text_name_offset = 1;      // ".text"
+    uint32_t data_name_offset = 7;      // ".data"
+    uint32_t bss_name_offset = 13;      // ".bss"
+    uint32_t symtab_name_offset = 18;   // ".symtab"
+    uint32_t strtab_name_offset = 26;   // ".strtab"
     uint32_t shstrtab_name_offset = 34; // ".shstrtab"
     uint32_t rel_text_name_offset = 44; // ".rel.text"
     uint32_t rel_data_name_offset = 54; // ".rel.data"// Count local symbols for sh_info (index of first non-local symbol)
-    int local_symbol_count = 2; // Start with 2 for null symbol and FILE symbol
+    int local_symbol_count = 2;         // Start with 2 for null symbol and FILE symbol
     sym = asm_ctx->symbols;
     while (sym)
     {
@@ -987,7 +997,7 @@ bool output_write_elf(assembler_t *asm_ctx)
             local_symbol_count++;
         sym = sym->next;
     }
-    
+
     // Write .text section header if it exists
     current = asm_ctx->sections;
     while (current)
@@ -1005,16 +1015,16 @@ bool output_write_elf(assembler_t *asm_ctx)
             shdr.sh_info = 0;
             shdr.sh_addralign = 1;
             shdr.sh_entsize = 0;
-            
+
             if (fwrite(&shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
                 return false;
-                
+
             file_offset += current->size;
             break;
         }
         current = current->next;
     }
-    
+
     // Write .data section header if it exists
     current = asm_ctx->sections;
     while (current)
@@ -1032,16 +1042,16 @@ bool output_write_elf(assembler_t *asm_ctx)
             shdr.sh_info = 0;
             shdr.sh_addralign = 1;
             shdr.sh_entsize = 0;
-            
+
             if (fwrite(&shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
                 return false;
-                
+
             file_offset += current->size;
             break;
         }
         current = current->next;
     }
-    
+
     // Write .bss section header if it exists (no file data)
     current = asm_ctx->sections;
     while (current)
@@ -1059,19 +1069,20 @@ bool output_write_elf(assembler_t *asm_ctx)
             shdr.sh_info = 0;
             shdr.sh_addralign = 1;
             shdr.sh_entsize = 0;
-            
+
             if (fwrite(&shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
                 return false;
             break;
         }
-        current = current->next;    }
+        current = current->next;
+    }
 
     // Calculate actual section indices
     // Layout: null(0), .text(1), .data(2), .bss(3), .symtab(4), .strtab(5), .rel.text(?), .rel.data(?), .shstrtab(last)
     int next_section_index = 1; // Start after null section
     int text_section_index = -1, data_section_index = -1, bss_section_index = -1;
     int symtab_section_index = -1, strtab_section_index = -1;
-    
+
     // Assign indices for regular sections
     current = asm_ctx->sections;
     while (current)
@@ -1087,18 +1098,18 @@ bool output_write_elf(assembler_t *asm_ctx)
         }
         current = current->next;
     }
-    
+
     // Assign indices for special sections
     symtab_section_index = next_section_index++;
     strtab_section_index = next_section_index++;
-    
+
     // Relocation sections come next
     int rel_text_section_index = -1, rel_data_section_index = -1;
     if (text_relocations > 0)
         rel_text_section_index = next_section_index++;
     if (data_relocations > 0)
         rel_data_section_index = next_section_index++;
-          // .shstrtab is last
+    // .shstrtab is last
     int shstrtab_section_index = next_section_index;
 
     // Update the ELF header with the correct shstrndx
@@ -1106,7 +1117,7 @@ bool output_write_elf(assembler_t *asm_ctx)
     fseek(asm_ctx->output, ehdr_position + offsetof(Elf32_Ehdr, e_shstrndx), SEEK_SET);
     uint16_t shstrndx = (uint16_t)shstrtab_section_index;
     fwrite(&shstrndx, sizeof(uint16_t), 1, asm_ctx->output);
-    fseek(asm_ctx->output, current_position, SEEK_SET);    // Write .symtab section header
+    fseek(asm_ctx->output, current_position, SEEK_SET); // Write .symtab section header
     Elf32_Shdr symtab_shdr = {0};
     symtab_shdr.sh_name = symtab_name_offset;
     symtab_shdr.sh_type = SHT_SYMTAB;
@@ -1115,10 +1126,10 @@ bool output_write_elf(assembler_t *asm_ctx)
     symtab_shdr.sh_offset = symtab_offset;
     symtab_shdr.sh_size = symtab_size;
     symtab_shdr.sh_link = strtab_section_index; // Index of .strtab section
-    symtab_shdr.sh_info = local_symbol_count; // Index of first non-local symbol
-        symtab_shdr.sh_addralign = 4;
+    symtab_shdr.sh_info = local_symbol_count;   // Index of first non-local symbol
+    symtab_shdr.sh_addralign = 4;
     symtab_shdr.sh_entsize = sizeof(Elf32_Sym);
-    
+
     if (fwrite(&symtab_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
         return false;
 
@@ -1132,11 +1143,12 @@ bool output_write_elf(assembler_t *asm_ctx)
     strtab_shdr.sh_size = strtab_size;
     strtab_shdr.sh_link = 0;
     strtab_shdr.sh_info = 0;
-    strtab_shdr.sh_addralign = 1;    strtab_shdr.sh_entsize = 0;
-    
+    strtab_shdr.sh_addralign = 1;
+    strtab_shdr.sh_entsize = 0;
+
     if (fwrite(&strtab_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
         return false;
-    
+
     // Write relocation section headers
     if (text_relocations > 0 && text_section_index >= 0)
     {
@@ -1148,14 +1160,14 @@ bool output_write_elf(assembler_t *asm_ctx)
         rel_text_shdr.sh_offset = rel_text_offset;
         rel_text_shdr.sh_size = rel_text_size;
         rel_text_shdr.sh_link = symtab_section_index; // Index of .symtab section
-        rel_text_shdr.sh_info = text_section_index; // Index of .text section being relocated
+        rel_text_shdr.sh_info = text_section_index;   // Index of .text section being relocated
         rel_text_shdr.sh_addralign = 4;
         rel_text_shdr.sh_entsize = sizeof(Elf32_Rel);
-        
+
         if (fwrite(&rel_text_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
             return false;
     }
-    
+
     if (data_relocations > 0 && data_section_index >= 0)
     {
         Elf32_Shdr rel_data_shdr = {0};
@@ -1166,10 +1178,10 @@ bool output_write_elf(assembler_t *asm_ctx)
         rel_data_shdr.sh_offset = rel_data_offset;
         rel_data_shdr.sh_size = rel_data_size;
         rel_data_shdr.sh_link = symtab_section_index; // Index of .symtab section
-        rel_data_shdr.sh_info = data_section_index; // Index of .data section being relocated
+        rel_data_shdr.sh_info = data_section_index;   // Index of .data section being relocated
         rel_data_shdr.sh_addralign = 4;
         rel_data_shdr.sh_entsize = sizeof(Elf32_Rel);
-        
+
         if (fwrite(&rel_data_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
             return false;
     }
@@ -1186,7 +1198,7 @@ bool output_write_elf(assembler_t *asm_ctx)
     shstrtab_shdr.sh_info = 0;
     shstrtab_shdr.sh_addralign = 1;
     shstrtab_shdr.sh_entsize = 0;
-    
+
     if (fwrite(&shstrtab_shdr, sizeof(Elf32_Shdr), 1, asm_ctx->output) != 1)
         return false;
 
@@ -1217,7 +1229,7 @@ void assembler_warning(assembler_t *asm_ctx, const char *format, ...)
 
 static char *read_file_content(const char *filename)
 {
-    FILE *file = fopen(filename, "rb");  // Use binary mode to avoid Windows text mode issues
+    FILE *file = fopen(filename, "rb"); // Use binary mode to avoid Windows text mode issues
     if (!file)
         return NULL;
 
@@ -1233,7 +1245,7 @@ static char *read_file_content(const char *filename)
     }
 
     size_t bytes_read = fread(content, 1, length, file);
-    content[bytes_read] = '\0';  // Use actual bytes read instead of length
+    content[bytes_read] = '\0'; // Use actual bytes read instead of length
     fclose(file);
 
     return content;
@@ -1255,11 +1267,12 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
         assembler_error(asm_ctx, "Failed to create parser for pass %d", pass);
         lexer_destroy(lexer);
         return false;
-    }    asm_ctx->pass = pass;
+    }
+    asm_ctx->pass = pass;
     bool success = true;
-    instruction_t instruction;    // Reset address tracking for each pass
+    instruction_t instruction; // Reset address tracking for each pass
     asm_ctx->current_address = asm_ctx->origin;
-    
+
     // Reset section sizes for each pass
     section_t *current_section = asm_ctx->sections;
     while (current_section)
@@ -1267,7 +1280,7 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
         current_section->size = 0;
         current_section = current_section->next;
     }
-    
+
     if (pass >= 2)
     {
         codegen_reset(asm_ctx); // Reset code buffer for all code generation passes
@@ -1295,13 +1308,13 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
         {
             success = false;
             break;
-        }        // Process instructions - calculate sizes in all passes, generate code in pass 2+
+        } // Process instructions - calculate sizes in all passes, generate code in pass 2+
         if (instruction.mnemonic[0] != '\0')
         {
             uint8_t dummy_buffer[16];
             size_t current_size = 0;
             uint32_t instruction_address = asm_ctx->current_address;
-            
+
             // Calculate instruction size
             if (!generate_opcode(&instruction, dummy_buffer, &current_size, asm_ctx))
             {
@@ -1320,7 +1333,7 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
             {
                 // Pass 2+: Generate actual code and check for size consistency
                 uint32_t expected_address_after = asm_ctx->current_address + current_size;
-                
+
                 // Generate actual code (this also advances the address)
                 if (!codegen_generate_instruction(asm_ctx, &instruction))
                 {
@@ -1329,7 +1342,7 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
                     success = false;
                     break;
                 }
-                
+
                 // Check if the actual final address matches our expectation
                 if (asm_ctx->current_address != expected_address_after)
                 {
@@ -1342,7 +1355,7 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
                 }
             }
         }
-    }    // Cleanup
+    } // Cleanup
     parser_destroy(parser);
     lexer_destroy(lexer);
 
@@ -1352,12 +1365,12 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
     if (asm_ctx->verbose)
     {
         printf("Pass %d completed. Current address: 0x%x\n", pass, asm_ctx->current_address);
-        
+
         // Print section information
         section_t *current = asm_ctx->sections;
         while (current)
         {
-            printf("  Section %s: address=0x%x, size=%u\n", 
+            printf("  Section %s: address=0x%x, size=%u\n",
                    current->name, current->address, current->size);
             current = current->next;
         }
@@ -1368,8 +1381,8 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
 bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const char *output_file)
 {
     // Store input filename in assembler context
-    asm_ctx->input_filename = (char*)input_file;
-    
+    asm_ctx->input_filename = (char *)input_file;
+
     // Read input file
     char *input_content = read_file_content(input_file);
     if (!input_content)
@@ -1385,15 +1398,17 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
         assembler_error(asm_ctx, "Failed to open output file: %s", output_file);
         free(input_content);
         return false;
-    }    bool success = true;
+    }
+    bool success = true;
     const int max_passes = 10; // Limit to prevent infinite loops
     int pass = 1;
     bool had_size_changes = false;
 
     // Iterative multi-pass assembly: continue until instruction sizes stabilize
-    do {
+    do
+    {
         asm_ctx->sizes_changed = false;
-        
+
         if (asm_ctx->verbose)
         {
             printf("Starting pass %d...\n", pass);
@@ -1407,13 +1422,13 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
 
         if (asm_ctx->verbose)
         {
-            printf("Pass %d completed. Sizes changed: %s\n", 
+            printf("Pass %d completed. Sizes changed: %s\n",
                    pass, asm_ctx->sizes_changed ? "yes" : "no");
         }
 
         had_size_changes = asm_ctx->sizes_changed;
         pass++;
-        
+
         // Check for max passes limit
         if (pass > max_passes)
         {
@@ -1425,7 +1440,7 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
             }
             break;
         }
-        
+
         // Continue if: this is the first pass through pass 2, OR the previous pass had size changes
     } while (pass == 2 || had_size_changes);
 
@@ -1434,7 +1449,7 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
     {
         success = false;
         goto cleanup;
-    }// Write output
+    } // Write output
     if (success)
     {
         switch (asm_ctx->format)
@@ -1457,7 +1472,8 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
 cleanup:
     free(input_content);
     fclose(asm_ctx->output);
-    asm_ctx->output = NULL;    if (success && asm_ctx->verbose)
+    asm_ctx->output = NULL;
+    if (success && asm_ctx->verbose)
     {
         size_t total_size = section_get_total_size(asm_ctx);
         printf("Assembly completed successfully. Total output size: %zu bytes\n", total_size);
@@ -1492,7 +1508,7 @@ bool section_add(assembler_t *asm_ctx, section_t *section)
 
     // Check if section already exists
     if (section_find(asm_ctx, section->name))
-        return false;    // Add to linked list
+        return false; // Add to linked list
     section->next = asm_ctx->sections;
     asm_ctx->sections = section;
 
@@ -1519,14 +1535,15 @@ bool section_switch(assembler_t *asm_ctx, const char *name)
     if (!asm_ctx || !name)
         return false;
 
-    section_t *section = section_find(asm_ctx, name);    if (!section)
+    section_t *section = section_find(asm_ctx, name);
+    if (!section)
         return false;
 
     asm_ctx->current_section_ptr = section;
-    
+
     // Update current address to the section's current position
     asm_ctx->current_address = section->address + section->size;
-    
+
     return true;
 }
 
@@ -1554,22 +1571,22 @@ void section_calculate_addresses(assembler_t *asm_ctx)
         return;
 
     uint32_t current_addr = asm_ctx->origin;
-    
+
     // Calculate addresses for each section type in order: .text, .data, .bss
     section_type_t section_order[] = {SECTION_TEXT, SECTION_DATA, SECTION_BSS};
-    
+
     for (int i = 0; i < 3; i++)
     {
         section_type_t type = section_order[i];
         section_t *current = asm_ctx->sections;
-        
+
         while (current)
         {
             if (current->type == type)
             {
                 current->address = current_addr;
                 current_addr += current->size;
-                
+
                 // Align to 4-byte boundary for next section
                 if (current_addr % 4 != 0)
                     current_addr = (current_addr + 3) & ~3;
@@ -1583,16 +1600,16 @@ size_t section_get_total_size(assembler_t *asm_ctx)
 {
     if (!asm_ctx)
         return 0;
-        
+
     size_t total = 0;
     section_t *current = asm_ctx->sections;
-    
+
     while (current)
     {
         total += current->size;
         current = current->next;
     }
-    
+
     return total;
 }
 
@@ -1653,14 +1670,14 @@ void relocation_add(assembler_t *asm_ctx, uint32_t offset, const char *symbol_na
     relocation_t *existing = asm_ctx->relocations;
     while (existing)
     {
-        if (existing->offset == offset && 
+        if (existing->offset == offset &&
             existing->section == section &&
             existing->relocation_type == relocation_type &&
             strcmp(existing->symbol_name, symbol_name) == 0)
         {
             if (asm_ctx->verbose)
             {
-                printf("DEBUG: Duplicate relocation detected, skipping: offset=0x%X, symbol='%s', type=%d, section=%d\n", 
+                printf("DEBUG: Duplicate relocation detected, skipping: offset=0x%X, symbol='%s', type=%d, section=%d\n",
                        offset, symbol_name, relocation_type, section);
             }
             return; // Don't add duplicate
@@ -1682,7 +1699,7 @@ void relocation_add(assembler_t *asm_ctx, uint32_t offset, const char *symbol_na
 
     if (asm_ctx->verbose)
     {
-        printf("DEBUG: Added relocation: offset=0x%X, symbol='%s', type=%d, section=%d\n", 
+        printf("DEBUG: Added relocation: offset=0x%X, symbol='%s', type=%d, section=%d\n",
                offset, symbol_name, relocation_type, section);
     }
 }
