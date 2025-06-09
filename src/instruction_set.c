@@ -1407,22 +1407,43 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 }
                 target_addr = symbol->address;
                 target_available = true;
-            }
-            else
+            }            else
             {
-                // Symbol not found or not defined - use proper placeholder size
+                // Symbol not found or not defined - check if it's external
                 if (asm_ctx->verbose)
                 {
                     if (symbol)
                     {
-                        printf("DEBUG: Symbol '%s' found but not defined (address=0x%04X, defined=%s)\n",
-                               symbol->name, symbol->address, symbol->defined ? "true" : "false");
+                        printf("DEBUG: Symbol '%s' found but not defined (address=0x%04X, defined=%s, external=%s)\n",
+                               symbol->name, symbol->address, symbol->defined ? "true" : "false",
+                               symbol->external ? "true" : "false");
                     }
                     else
                     {
                         printf("DEBUG: Symbol '%s' not found in symbol table\n",
                                instr->operands[0].value.label);
                     }
+                }
+                  // If this is an external symbol, we need to generate a relocation entry
+                if (symbol && symbol->external && asm_ctx->pass == 2)
+                {
+                    // Generate relocation entry for external symbol
+                    uint32_t current_addr = codegen_get_current_address(asm_ctx);
+                    section_t *current_section = section_get_current(asm_ctx);
+                    section_type_t section_type = current_section ? current_section->type : SECTION_TEXT;
+                    uint32_t offset_in_section = current_addr - (current_section ? current_section->address : 0);
+                    
+                    // Determine relocation type based on instruction
+                    int relocation_type = R_386_PC32; // Default for call/jmp (PC-relative)
+                    
+                    if (asm_ctx->verbose)
+                    {
+                        printf("DEBUG: Adding relocation for external symbol '%s' at offset 0x%X in section %d, type R_386_PC32\n",
+                               symbol->name, offset_in_section + 1, section_type); // +1 to point to displacement field
+                    }
+                    
+                    // Add relocation entry pointing to the displacement field (after opcode)
+                    relocation_add(asm_ctx, offset_in_section + 1, symbol->name, relocation_type, section_type);
                 }
             }
         }

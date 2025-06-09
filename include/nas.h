@@ -193,6 +193,21 @@ typedef struct symbol
     struct symbol *next;
 } symbol_t;
 
+// Relocation entry for tracking relocations during assembly
+typedef struct relocation
+{
+    uint32_t offset;          // Offset within section where relocation applies
+    char symbol_name[MAX_LABEL_LENGTH]; // Name of symbol being relocated
+    int relocation_type;      // Type of relocation (R_386_PC32, R_386_32, etc.)
+    section_type_t section;   // Which section this relocation belongs to
+    struct relocation *next;
+} relocation_t;
+
+// Relocation types (i386)
+#define R_386_NONE      0      // No reloc
+#define R_386_32        1      // Direct 32 bit  
+#define R_386_PC32      2      // PC relative 32 bit
+
 // Assembler context
 typedef struct
 {
@@ -215,10 +230,11 @@ typedef struct
     bool verbose;
     bool error_occurred;
     int pass; // Current assembler pass
-    bool sizes_changed; // Track if instruction sizes changed during pass
-    // Section support
+    bool sizes_changed; // Track if instruction sizes changed during pass    // Section support
     section_t *sections;
     section_type_t current_section;
+    // Relocation support
+    relocation_t *relocations;
     section_t *current_section_ptr;
 } assembler_t;
 

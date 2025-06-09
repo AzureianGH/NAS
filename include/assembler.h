@@ -37,6 +37,10 @@ bool output_write_binary(assembler_t *asm_ctx);
 bool output_write_hex(assembler_t *asm_ctx);
 bool output_write_elf(assembler_t *asm_ctx);
 
+// Relocation management functions
+void relocation_add(assembler_t *asm_ctx, uint32_t offset, const char *symbol_name, int relocation_type, section_type_t section);
+void relocation_table_destroy(relocation_t *relocations);
+
 // Error handling
 void assembler_error(assembler_t *asm_ctx, const char *format, ...);
 void assembler_warning(assembler_t *asm_ctx, const char *format, ...);

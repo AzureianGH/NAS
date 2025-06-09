@@ -2,6 +2,6 @@
 #global main
 #extend exit
 main:
-    push 0xAF
+    push dword 123
     call exit
     add esp, 4
