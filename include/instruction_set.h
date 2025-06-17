@@ -30,7 +30,7 @@ typedef struct
 {
     char mnemonic[16];
     encoding_type_t encoding;
-    uint8_t opcode;
+    uint16_t opcode;
     uint8_t modrm_reg; // For instructions that use ModR/M byte
     bool has_modrm;
     bool has_displacement;
