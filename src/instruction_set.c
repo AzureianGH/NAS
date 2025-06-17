@@ -1479,12 +1479,10 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                     instruction_size = 3; // 16-bit mode: opcode + 16-bit displacement
                 }
 
-                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);
-
-                // Handle the case where target equals current address (call to next instruction)
+                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);                // Handle the case where target equals current address (call to itself)
                 if (target_addr == current_addr)
                 {
-                    displacement = 0; // Call to next instruction (unusual but valid)
+                    displacement = -(int32_t)instruction_size; // Call back to start of current instruction
                 }
 
                 if (asm_ctx->verbose)
@@ -1521,12 +1519,10 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 bool needs_long_jump = (short_displacement < -128 || short_displacement > 127);
 
                 uint32_t optimal_size = needs_long_jump ? long_size : short_size;
-                int32_t displacement = (int32_t)(target_addr - current_addr - optimal_size);
-
-                // Handle the case where target equals current address (jump to next instruction)
+                int32_t displacement = (int32_t)(target_addr - current_addr - optimal_size);                // Handle the case where target equals current address (jump to itself)
                 if (target_addr == current_addr)
                 {
-                    displacement = 0; // No jump needed, fall through to next instruction
+                    displacement = -(int32_t)optimal_size; // Jump back to start of current instruction
                 }
 
                 if (asm_ctx->verbose)
@@ -1551,16 +1547,14 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                     // Use long jump
                     if (strcasecmp(instr->mnemonic, "jmp") == 0)
                     {                     // For unconditional jumps, use near jump (0xE9) with 16-bit displacement
-                        buffer[0] = 0xE9; // Near JMP opcode
-
-                        // Calculate displacement for near jump (3 bytes total)
+                        buffer[0] = 0xE9; // Near JMP opcode                        // Calculate displacement for near jump (3 bytes total)
                         uint32_t near_instruction_size = 3;
                         int32_t near_displacement = (int32_t)(target_addr - current_addr - near_instruction_size);
 
-                        // Handle the case where target equals current address (jump to next instruction)
+                        // Handle the case where target equals current address (jump to itself)
                         if (target_addr == current_addr)
                         {
-                            near_displacement = 0; // No jump needed, fall through to next instruction
+                            near_displacement = -(int32_t)near_instruction_size; // Jump back to start of current instruction
                         }
                         buffer[1] = (uint8_t)(near_displacement & 0xFF);
                         buffer[2] = (uint8_t)((near_displacement >> 8) & 0xFF);
@@ -1584,16 +1578,14 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                             return false;
                         } // Use 0F 8x near conditional jump (4 bytes total)
                         buffer[0] = 0x0F;        // Two-byte opcode prefix
-                        buffer[1] = near_opcode; // Near conditional jump opcode
-
-                        // Calculate displacement for near conditional jump (4 bytes total)
+                        buffer[1] = near_opcode; // Near conditional jump opcode                        // Calculate displacement for near conditional jump (4 bytes total)
                         uint32_t near_instruction_size = 4;
                         int32_t near_displacement = (int32_t)(target_addr - current_addr - near_instruction_size);
 
-                        // Handle the case where target equals current address (jump to next instruction)
+                        // Handle the case where target equals current address (jump to itself)
                         if (target_addr == current_addr)
                         {
-                            near_displacement = 0; // No jump needed, fall through to next instruction
+                            near_displacement = -(int32_t)near_instruction_size; // Jump back to start of current instruction
                         }
                         buffer[2] = (uint8_t)(near_displacement & 0xFF);
                         buffer[3] = (uint8_t)((near_displacement >> 8) & 0xFF);

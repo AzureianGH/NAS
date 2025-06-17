@@ -2,6 +2,13 @@
 #include <stdarg.h>
 #include <stddef.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#define usleep(x) Sleep((x)/1000)
+#else
+#include <unistd.h>
+#endif
+
 assembler_t *assembler_create(void)
 {
     assembler_t *asm_ctx = malloc(sizeof(assembler_t));
@@ -106,6 +113,35 @@ bool assembler_set_origin(assembler_t *asm_ctx, uint32_t origin)
     return true;
 }
 
+// Progress display functions
+static void clear_line() {
+    printf("\r\033[K");  // Clear line
+}
+
+static void show_pass_progress(const char* phase, int current_pass, int total_passes, const char* action) {
+    clear_line();
+    int progress = (total_passes > 0) ? (int)((current_pass * 40) / total_passes) : 0;
+    printf("\r\033[36m[");
+    for (int i = 0; i < 40; i++) {
+        if (i < progress) printf("=");
+        else printf("-");
+    }
+    printf("]\033[0m Pass \033[33m%d\033[0m: %s", current_pass, action);
+    if (phase && strlen(phase) > 0) {
+        printf(" \033[36m(%s)\033[0m", phase);
+    }
+    fflush(stdout);
+}
+
+static void show_symbol_resolution(const char* symbol_name, uint32_t address, bool defined) {
+    clear_line();
+    const char* status_color = defined ? "\033[32m" : "\033[33m";
+    const char* status = defined ? "RESOLVED" : "DEFERRED";
+    printf("\r\033[34m>\033[0m Symbol: \033[35m%-20s\033[0m -> %s0x%04X %s\033[0m", 
+           symbol_name, status_color, address, status);
+    fflush(stdout);
+}
+
 // Symbol table functions
 void symbol_table_dump(assembler_t *asm_ctx)
 {
@@ -177,6 +213,13 @@ bool symbol_define(assembler_t *asm_ctx, const char *name, uint32_t address)
         existing->address = address;
         existing->defined = true;
         existing->section = asm_ctx->current_section_ptr ? asm_ctx->current_section_ptr->type : SECTION_TEXT;
+        
+        // Show symbol resolution progress
+        if (asm_ctx->verbose && asm_ctx->pass >= 2) {
+            show_symbol_resolution(name, address, true);
+            usleep(25000); // 25ms delay
+        }
+        
         return true;
     }
 
@@ -191,6 +234,12 @@ bool symbol_define(assembler_t *asm_ctx, const char *name, uint32_t address)
     new_symbol->section = asm_ctx->current_section_ptr ? asm_ctx->current_section_ptr->type : SECTION_TEXT;
     new_symbol->next = asm_ctx->symbols;
     asm_ctx->symbols = new_symbol;
+    
+    // Show symbol resolution progress
+    if (asm_ctx->verbose && asm_ctx->pass >= 2) {
+        show_symbol_resolution(name, address, true);
+        usleep(25000); // 25ms delay
+    }
 
     return true;
 }
@@ -1279,22 +1328,31 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
     {
         current_section->size = 0;
         current_section = current_section->next;
-    }
-
-    if (pass >= 2)
+    }    if (pass >= 2)
     {
         codegen_reset(asm_ctx); // Reset code buffer for all code generation passes
     }
-    if (asm_ctx->verbose)
-    {
-        printf("Starting pass %d...\n", pass);
+    
+    int line_count = 0;
+    int processed_lines = 0;
+    
+    // Count total lines for progress display (if verbose)
+    if (asm_ctx->verbose) {
+        const char *temp = input_content;
+        while (*temp) {
+            if (*temp == '\n') line_count++;
+            temp++;
+        }
+        if (line_count == 0) line_count = 1; // At least one line
+        
+        show_pass_progress("initializing", 0, line_count, "parsing source");
+        usleep(100000); // 100ms delay
+        
         if (pass >= 2)
         {
             symbol_table_dump(asm_ctx);
         }
-    }
-
-    // Process all lines
+    }    // Process all lines
     while (true)
     {
         bool parsed = parser_parse_line(parser, &instruction);
@@ -1302,13 +1360,22 @@ static bool assembler_pass(assembler_t *asm_ctx, const char *input_content, int 
         {
             break; // no more lines or reached EOF, or parsing error occurred
         }
+        
+        processed_lines++;
+        
+        // Show progress every few lines for smooth animation
+        if (asm_ctx->verbose && processed_lines % 5 == 0) {
+            show_pass_progress("processing", processed_lines, line_count, 
+                             pass == 1 ? "calculating sizes" : "generating code");
+            usleep(15000); // 15ms delay
+        }
 
         // Check if an error occurred during parsing
         if (asm_ctx->error_occurred)
         {
             success = false;
             break;
-        } // Process instructions - calculate sizes in all passes, generate code in pass 2+
+        }// Process instructions - calculate sizes in all passes, generate code in pass 2+
         if (instruction.mnemonic[0] != '\0')
         {
             uint8_t dummy_buffer[16];
@@ -1398,11 +1465,23 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
         assembler_error(asm_ctx, "Failed to open output file: %s", output_file);
         free(input_content);
         return false;
-    }
-    bool success = true;
+    }    bool success = true;
     const int max_passes = 10; // Limit to prevent infinite loops
     int pass = 1;
     bool had_size_changes = false;
+
+    // Show assembler startup
+    if (asm_ctx->verbose) {
+        printf("\n\033[1;35m+- NAS Assembly Engine -----------------------------------------------+\033[0m\n");
+        printf("\033[1;35m|\033[0m \033[36mInitializing multi-pass assembler...\033[0m                           \033[1;35m|\033[0m\n");
+        printf("\033[1;35m+-----------------------------------------------------------------+\033[0m\n\n");
+        printf("\033[1;32m*\033[0m Input file: \033[33m%s\033[0m\n", input_file);
+        printf("\033[1;32m*\033[0m Output file: \033[33m%s\033[0m\n", output_file);
+        printf("\033[1;32m*\033[0m Mode: \033[33m%d-bit\033[0m\n", asm_ctx->mode == MODE_16BIT ? 16 : 32);
+        printf("\033[1;32m*\033[0m Format: \033[33m%s\033[0m\n\n", 
+               asm_ctx->format == FORMAT_BIN ? "binary" : 
+               (asm_ctx->format == FORMAT_HEX ? "hex" : "elf"));
+    }
 
     // Iterative multi-pass assembly: continue until instruction sizes stabilize
     do
@@ -1411,10 +1490,11 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
 
         if (asm_ctx->verbose)
         {
-            printf("Starting pass %d...\n", pass);
-        }
-
-        if (!assembler_pass(asm_ctx, input_content, pass))
+            printf("\033[1;34mO Phase %d:\033[0m %s\n", pass, 
+                   pass == 1 ? "Symbol discovery and size calculation" :
+                   pass == 2 ? "Code generation and symbol resolution" :
+                   "Address convergence and refinement");
+        }        if (!assembler_pass(asm_ctx, input_content, pass))
         {
             success = false;
             goto cleanup;
@@ -1422,8 +1502,11 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
 
         if (asm_ctx->verbose)
         {
-            printf("Pass %d completed. Sizes changed: %s\n",
-                   pass, asm_ctx->sizes_changed ? "yes" : "no");
+            clear_line();
+            const char* status_color = asm_ctx->sizes_changed ? "\033[33m" : "\033[32m";
+            const char* status_text = asm_ctx->sizes_changed ? "SIZES CHANGED" : "CONVERGED";
+            printf("\r\033[1;32m*\033[0m Pass %d complete - %s%s\033[0m\n", 
+                   pass, status_color, status_text);
         }
 
         had_size_changes = asm_ctx->sizes_changed;
@@ -1439,17 +1522,32 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
                 goto cleanup;
             }
             break;
-        }
-
-        // Continue if: this is the first pass through pass 2, OR the previous pass had size changes
+        }        // Continue if: this is the first pass through pass 2, OR the previous pass had size changes
     } while (pass == 2 || had_size_changes);
+
+    if (asm_ctx->verbose) {
+        printf("\n\033[1;34mO Final Phase:\033[0m Symbol validation and output generation\n");
+        
+        // Count symbols for display
+        int symbol_count = 0, defined_count = 0, undefined_count = 0;
+        symbol_t *sym = asm_ctx->symbols;
+        while (sym) {
+            symbol_count++;
+            if (sym->defined) defined_count++;
+            else undefined_count++;
+            sym = sym->next;
+        }
+        
+        printf("Validating %d symbols (%d defined, %d undefined)...\n", 
+               symbol_count, defined_count, undefined_count);
+    }
 
     // Check for undefined symbols and report errors
     if (!symbol_check_undefined(asm_ctx))
     {
         success = false;
         goto cleanup;
-    } // Write output
+    }// Write output
     if (success)
     {
         switch (asm_ctx->format)
@@ -1476,7 +1574,33 @@ cleanup:
     if (success && asm_ctx->verbose)
     {
         size_t total_size = section_get_total_size(asm_ctx);
-        printf("Assembly completed successfully. Total output size: %zu bytes\n", total_size);
+        
+        // Count symbols
+        int symbol_count = 0, defined_count = 0;
+        symbol_t *sym = asm_ctx->symbols;
+        while (sym) {
+            symbol_count++;
+            if (sym->defined) defined_count++;
+            sym = sym->next;
+        }
+        
+        // Count sections
+        int section_count = 0;
+        section_t *sect = asm_ctx->sections;
+        while (sect) {
+            if (sect->size > 0) section_count++;
+            sect = sect->next;
+        }
+        
+        printf("\n\033[1;32m@ Assembly Summary:\033[0m\n");
+        printf("   * \033[33m%d\033[0m passes completed\n", pass - 1);
+        printf("   * \033[33m%d\033[0m symbols resolved\n", defined_count);
+        printf("   * \033[33m%d\033[0m sections generated\n", section_count);
+        printf("   * \033[33m%zu\033[0m bytes written\n", total_size);
+        printf("   * Output format: \033[33m%s\033[0m\n", 
+               asm_ctx->format == FORMAT_BIN ? "binary" : 
+               (asm_ctx->format == FORMAT_HEX ? "hex" : "elf"));
+        printf("\n\033[1;32m*\033[0m Assembly completed successfully!\n\n");
     }
 
     return success;
