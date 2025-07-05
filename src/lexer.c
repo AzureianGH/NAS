@@ -67,13 +67,46 @@ register_t parse_register(const char *str)
     if (strcasecmp(str, "edx") == 0)
         return REG_EDX;
     if (strcasecmp(str, "esi") == 0)
-        return REG_ESI;
+        return REG_ESI;    
     if (strcasecmp(str, "edi") == 0)
         return REG_EDI;
     if (strcasecmp(str, "ebp") == 0)
         return REG_EBP;
     if (strcasecmp(str, "esp") == 0)
         return REG_ESP;
+    // 64-bit registers
+    if (strcasecmp(str, "rax") == 0)
+        return REG_RAX;
+    if (strcasecmp(str, "rbx") == 0)
+        return REG_RBX;
+    if (strcasecmp(str, "rcx") == 0)
+        return REG_RCX;
+    if (strcasecmp(str, "rdx") == 0)
+        return REG_RDX;
+    if (strcasecmp(str, "rsi") == 0)
+        return REG_RSI;
+    if (strcasecmp(str, "rdi") == 0)
+        return REG_RDI;
+    if (strcasecmp(str, "rbp") == 0)
+        return REG_RBP;
+    if (strcasecmp(str, "rsp") == 0)
+        return REG_RSP;
+    if (strcasecmp(str, "r8") == 0)
+        return REG_R8;
+    if (strcasecmp(str, "r9") == 0)
+        return REG_R9;
+    if (strcasecmp(str, "r10") == 0)
+        return REG_R10;
+    if (strcasecmp(str, "r11") == 0)
+        return REG_R11;
+    if (strcasecmp(str, "r12") == 0)
+        return REG_R12;
+    if (strcasecmp(str, "r13") == 0)
+        return REG_R13;
+    if (strcasecmp(str, "r14") == 0)
+        return REG_R14;
+    if (strcasecmp(str, "r15") == 0)
+        return REG_R15;
     // 8-bit registers
     if (strcasecmp(str, "al") == 0)
         return REG_AL;
@@ -91,6 +124,65 @@ register_t parse_register(const char *str)
         return REG_DL;
     if (strcasecmp(str, "dh") == 0)
         return REG_DH;
+    // 64-bit 8-bit registers
+    if (strcasecmp(str, "sil") == 0)
+        return REG_SIL;
+    if (strcasecmp(str, "dil") == 0)
+        return REG_DIL;
+    if (strcasecmp(str, "bpl") == 0)
+        return REG_BPL;
+    if (strcasecmp(str, "spl") == 0)
+        return REG_SPL;
+    if (strcasecmp(str, "r8b") == 0)
+        return REG_R8B;
+    if (strcasecmp(str, "r9b") == 0)
+        return REG_R9B;
+    if (strcasecmp(str, "r10b") == 0)
+        return REG_R10B;
+    if (strcasecmp(str, "r11b") == 0)
+        return REG_R11B;
+    if (strcasecmp(str, "r12b") == 0)
+        return REG_R12B;
+    if (strcasecmp(str, "r13b") == 0)
+        return REG_R13B;
+    if (strcasecmp(str, "r14b") == 0)
+        return REG_R14B;
+    if (strcasecmp(str, "r15b") == 0)
+        return REG_R15B;
+    // 64-bit 16-bit registers
+    if (strcasecmp(str, "r8w") == 0)
+        return REG_R8W;
+    if (strcasecmp(str, "r9w") == 0)
+        return REG_R9W;
+    if (strcasecmp(str, "r10w") == 0)
+        return REG_R10W;
+    if (strcasecmp(str, "r11w") == 0)
+        return REG_R11W;
+    if (strcasecmp(str, "r12w") == 0)
+        return REG_R12W;
+    if (strcasecmp(str, "r13w") == 0)
+        return REG_R13W;
+    if (strcasecmp(str, "r14w") == 0)
+        return REG_R14W;
+    if (strcasecmp(str, "r15w") == 0)
+        return REG_R15W;
+    // 64-bit 32-bit registers
+    if (strcasecmp(str, "r8d") == 0)
+        return REG_R8D;
+    if (strcasecmp(str, "r9d") == 0)
+        return REG_R9D;
+    if (strcasecmp(str, "r10d") == 0)
+        return REG_R10D;
+    if (strcasecmp(str, "r11d") == 0)
+        return REG_R11D;
+    if (strcasecmp(str, "r12d") == 0)
+        return REG_R12D;
+    if (strcasecmp(str, "r13d") == 0)
+        return REG_R13D;
+    if (strcasecmp(str, "r14d") == 0)
+        return REG_R14D;
+    if (strcasecmp(str, "r15d") == 0)
+        return REG_R15D;
     // Control registers
     if (strcasecmp(str, "cr0") == 0)
         return REG_CR0;
@@ -157,9 +249,41 @@ const char *register_to_string(register_t reg)
     case REG_EDI:
         return "edi";
     case REG_EBP:
-        return "ebp";
-    case REG_ESP:
+        return "ebp";    case REG_ESP:
         return "esp";
+    // 64-bit registers
+    case REG_RAX:
+        return "rax";
+    case REG_RBX:
+        return "rbx";
+    case REG_RCX:
+        return "rcx";
+    case REG_RDX:
+        return "rdx";
+    case REG_RSI:
+        return "rsi";
+    case REG_RDI:
+        return "rdi";
+    case REG_RBP:
+        return "rbp";
+    case REG_RSP:
+        return "rsp";
+    case REG_R8:
+        return "r8";
+    case REG_R9:
+        return "r9";
+    case REG_R10:
+        return "r10";
+    case REG_R11:
+        return "r11";
+    case REG_R12:
+        return "r12";
+    case REG_R13:
+        return "r13";
+    case REG_R14:
+        return "r14";
+    case REG_R15:
+        return "r15";
     // 8-bit registers
     case REG_AL:
         return "al";
@@ -177,6 +301,65 @@ const char *register_to_string(register_t reg)
         return "dl";
     case REG_DH:
         return "dh";
+    // 64-bit 8-bit registers
+    case REG_SIL:
+        return "sil";
+    case REG_DIL:
+        return "dil";
+    case REG_BPL:
+        return "bpl";
+    case REG_SPL:
+        return "spl";
+    case REG_R8B:
+        return "r8b";
+    case REG_R9B:
+        return "r9b";
+    case REG_R10B:
+        return "r10b";
+    case REG_R11B:
+        return "r11b";
+    case REG_R12B:
+        return "r12b";
+    case REG_R13B:
+        return "r13b";
+    case REG_R14B:
+        return "r14b";
+    case REG_R15B:
+        return "r15b";
+    // 64-bit 16-bit registers
+    case REG_R8W:
+        return "r8w";
+    case REG_R9W:
+        return "r9w";
+    case REG_R10W:
+        return "r10w";
+    case REG_R11W:
+        return "r11w";
+    case REG_R12W:
+        return "r12w";
+    case REG_R13W:
+        return "r13w";
+    case REG_R14W:
+        return "r14w";
+    case REG_R15W:
+        return "r15w";
+    // 64-bit 32-bit registers
+    case REG_R8D:
+        return "r8d";
+    case REG_R9D:
+        return "r9d";
+    case REG_R10D:
+        return "r10d";
+    case REG_R11D:
+        return "r11d";
+    case REG_R12D:
+        return "r12d";
+    case REG_R13D:
+        return "r13d";
+    case REG_R14D:
+        return "r14d";
+    case REG_R15D:
+        return "r15d";
     // Control registers
     case REG_CR0:
         return "cr0";
@@ -348,8 +531,9 @@ static token_t lexer_read_string(lexer_t *lexer)
             // Loop instructions
             "loop", "loope", "loopz", "loopne", "loopnz", "jcxz",
             // String operations
-            "movsb", "movsw", "cmpsb", "cmpsw", "scasb", "scasw",
-            "lodsb", "lodsw", "stosb", "stosw",
+            "movsb", "movsw", "movsd", "movsq", "cmpsb", "cmpsw", "cmpsd", "cmpsq", 
+            "scasb", "scasw", "scasd", "scasq", "lodsb", "lodsw", "lodsd", "lodsq", 
+            "stosb", "stosw", "stosd", "stosq",
             // String prefixes
             "rep", "repe", "repz", "repne", "repnz",
             // Flag operations

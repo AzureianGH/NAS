@@ -1477,7 +1477,22 @@ bool assembler_assemble_file(assembler_t *asm_ctx, const char *input_file, const
         printf("\033[1;35m+-----------------------------------------------------------------+\033[0m\n\n");
         printf("\033[1;32m*\033[0m Input file: \033[33m%s\033[0m\n", input_file);
         printf("\033[1;32m*\033[0m Output file: \033[33m%s\033[0m\n", output_file);
-        printf("\033[1;32m*\033[0m Mode: \033[33m%d-bit\033[0m\n", asm_ctx->mode == MODE_16BIT ? 16 : 32);
+        if (asm_ctx->mode == MODE_16BIT)
+        {
+            printf("\033[1;32m*\033[0m Mode: \033[33m16-bit\033[0m\n");
+        }
+        else if (asm_ctx->mode == MODE_32BIT)
+        {
+            printf("\033[1;32m*\033[0m Mode: \033[33m32-bit\033[0m\n");
+        }
+        else if (asm_ctx->mode == MODE_64BIT)
+        {
+            printf("\033[1;32m*\033[0m Mode: \033[33m64-bit\033[0m\n");
+        }
+        else
+        {
+            printf("\033[1;32m*\033[0m Mode: \033[33mUnknown\033[0m\n");
+        }
         printf("\033[1;32m*\033[0m Format: \033[33m%s\033[0m\n\n", 
                asm_ctx->format == FORMAT_BIN ? "binary" : 
                (asm_ctx->format == FORMAT_HEX ? "hex" : "elf"));

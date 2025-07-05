@@ -22,7 +22,7 @@ bool parser_expect_token(parser_t *parser, token_type_t type);
 bool parser_match_token(parser_t *parser, token_type_t type);
 void parser_advance(parser_t *parser);
 operand_t parser_parse_operand(parser_t *parser);
-int32_t parser_parse_immediate(parser_t *parser);
+int64_t parser_parse_immediate(parser_t *parser);
 operand_t parser_parse_memory(parser_t *parser);
 
 // REP prefix helper functions

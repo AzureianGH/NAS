@@ -17,7 +17,8 @@
 typedef enum
 {
     MODE_16BIT = 16,
-    MODE_32BIT = 32
+    MODE_32BIT = 32,
+    MODE_64BIT = 64
 } asm_mode_t;
 
 // Output formats
@@ -83,7 +84,24 @@ typedef enum
     REG_ESI,
     REG_EDI,
     REG_EBP,
-    REG_ESP,    // 8-bit registers
+    REG_ESP,    // 64-bit registers
+    REG_RAX,
+    REG_RBX,
+    REG_RCX,
+    REG_RDX,
+    REG_RSI,
+    REG_RDI,
+    REG_RBP,
+    REG_RSP,
+    REG_R8,
+    REG_R9,
+    REG_R10,
+    REG_R11,
+    REG_R12,
+    REG_R13,
+    REG_R14,
+    REG_R15,
+    // 8-bit registers
     REG_AL,
     REG_AH,
     REG_BL,
@@ -92,6 +110,37 @@ typedef enum
     REG_CH,
     REG_DL,
     REG_DH,
+    // 64-bit 8-bit registers (REX accessible)
+    REG_SIL,
+    REG_DIL,
+    REG_BPL,
+    REG_SPL,
+    REG_R8B,
+    REG_R9B,
+    REG_R10B,
+    REG_R11B,
+    REG_R12B,
+    REG_R13B,
+    REG_R14B,
+    REG_R15B,
+    // 64-bit 16-bit registers
+    REG_R8W,
+    REG_R9W,
+    REG_R10W,
+    REG_R11W,
+    REG_R12W,
+    REG_R13W,
+    REG_R14W,
+    REG_R15W,
+    // 64-bit 32-bit registers
+    REG_R8D,
+    REG_R9D,
+    REG_R10D,
+    REG_R11D,
+    REG_R12D,
+    REG_R13D,
+    REG_R14D,
+    REG_R15D,
     // Control registers
     REG_CR0,
     REG_CR1,
@@ -130,7 +179,7 @@ typedef struct
     union
     {
         register_t reg;
-        int32_t immediate;
+        int64_t immediate;
         struct
         {
             register_t base;
@@ -147,9 +196,8 @@ typedef struct
             bool has_label_offset;                 // True if offset is a label
             char offset_label[MAX_LABEL_LENGTH];   // Label name for offset
         } far_ptr;
-        char label[MAX_LABEL_LENGTH];
-    } value;
-    int size; // 8, 16, 32 bits
+        char label[MAX_LABEL_LENGTH];    } value;
+    int size; // 8, 16, 32, 64 bits
 } operand_t;
 
 // Instruction structure

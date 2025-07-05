@@ -20,9 +20,9 @@ void print_usage(const char *program_name)
 {
     printf("Usage: %s [options] input_file -o output_file\n", program_name);
     printf("Options:\n");
-    printf("  -m, --mode <mode>      Assembly mode (16 or 32, default: 16)\n");
+    printf("  -m, --mode <mode>      Assembly mode (16, 32, or 64, default: 16)\n");
     printf("  -f, --format <format>  Output format (bin, hex, elf, default: bin)\n");
-    printf("                         Note: elf format only available in 32-bit mode\n");
+    printf("                         Note: elf format only available in 32-bit and 64-bit mode\n");
     printf("  -o, --output <file>    Output file\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -bc, --bit-change      Allow changing bit width mid-assembly via #width directives\n");
@@ -30,7 +30,7 @@ void print_usage(const char *program_name)
     printf("  --version              Show version information\n");
     printf("\nExamples:\n");
     printf("  %s -m16 -f bin test/os.asm -o test/os.bin\n", program_name);
-    printf("  %s --mode 16 --format hex input.asm -o output.hex\n", program_name);
+    printf("  %s --mode 64 --format bin input.asm -o output.bin\n", program_name);
     printf("  %s -bc test16.asm -o test16.bin  # Allow bit width changes\n", program_name);
 }
 
@@ -74,8 +74,7 @@ int main(int argc, char *argv[])
     while ((c = getopt_long(argc, argv, "m:f:o:vh", long_options, &option_index)) != -1)
     {
         switch (c)
-        {
-        case 'm':
+        {        case 'm':
             if (strcmp(optarg, "16") == 0)
             {
                 mode = MODE_16BIT;
@@ -84,9 +83,13 @@ int main(int argc, char *argv[])
             {
                 mode = MODE_32BIT;
             }
+            else if (strcmp(optarg, "64") == 0)
+            {
+                mode = MODE_64BIT;
+            }
             else
             {
-                fprintf(stderr, "Error: Invalid mode '%s'. Use 16 or 32.\n", optarg);
+                fprintf(stderr, "Error: Invalid mode '%s'. Use 16, 32, or 64.\n", optarg);
                 return 1;
             }
             break;
@@ -158,12 +161,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Error: No output file specified.\n");
         print_usage(argv[0]);
         return 1;
-    }
-
-    // Validate ELF format is only used with 32-bit mode
-    if (format == FORMAT_ELF && mode != MODE_32BIT)
+    }    // Validate ELF format is only used with 32-bit or 64-bit mode
+    if (format == FORMAT_ELF && mode == MODE_16BIT)
     {
-        fprintf(stderr, "Error: ELF format (-f elf) is only available in 32-bit mode (-m 32).\n");
+        fprintf(stderr, "Error: ELF format (-f elf) is only available in 32-bit (-m 32) or 64-bit (-m 64) mode.\n");
         return 1;
     }
 

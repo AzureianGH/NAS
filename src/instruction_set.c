@@ -101,19 +101,27 @@ static const instruction_def_t instruction_table[] = { // Data movement
     {"loopz", ENC_JMP_REL, 0xE1, 0, false, true, true, 1}, // Same as LOOPE
     {"loopne", ENC_JMP_REL, 0xE0, 0, false, true, true, 1},
     {"loopnz", ENC_JMP_REL, 0xE0, 0, false, true, true, 1}, // Same as LOOPNE
-    {"jcxz", ENC_JMP_REL, 0xE3, 0, false, true, true, 1},
-
-    // String operations
+    {"jcxz", ENC_JMP_REL, 0xE3, 0, false, true, true, 1},    // String operations
     {"movsb", ENC_SINGLE, 0xA4, 0, false, false, false, 0},
     {"movsw", ENC_SINGLE, 0xA5, 0, false, false, false, 0},
+    {"movsd", ENC_SINGLE, 0xA5, 0, false, false, false, 0}, // 32-bit move
+    {"movsq", ENC_SINGLE, 0xA5, 0, false, false, false, 0}, // 64-bit move (with REX.W)
     {"cmpsb", ENC_SINGLE, 0xA6, 0, false, false, false, 0},
     {"cmpsw", ENC_SINGLE, 0xA7, 0, false, false, false, 0},
+    {"cmpsd", ENC_SINGLE, 0xA7, 0, false, false, false, 0}, // 32-bit compare
+    {"cmpsq", ENC_SINGLE, 0xA7, 0, false, false, false, 0}, // 64-bit compare (with REX.W)
     {"scasb", ENC_SINGLE, 0xAE, 0, false, false, false, 0},
     {"scasw", ENC_SINGLE, 0xAF, 0, false, false, false, 0},
+    {"scasd", ENC_SINGLE, 0xAF, 0, false, false, false, 0}, // 32-bit scan
+    {"scasq", ENC_SINGLE, 0xAF, 0, false, false, false, 0}, // 64-bit scan (with REX.W)
     {"lodsb", ENC_SINGLE, 0xAC, 0, false, false, false, 0},
     {"lodsw", ENC_SINGLE, 0xAD, 0, false, false, false, 0},
+    {"lodsd", ENC_SINGLE, 0xAD, 0, false, false, false, 0}, // 32-bit load
+    {"lodsq", ENC_SINGLE, 0xAD, 0, false, false, false, 0}, // 64-bit load (with REX.W)
     {"stosb", ENC_SINGLE, 0xAA, 0, false, false, false, 0},
     {"stosw", ENC_SINGLE, 0xAB, 0, false, false, false, 0},
+    {"stosd", ENC_SINGLE, 0xAB, 0, false, false, false, 0}, // 32-bit store
+    {"stosq", ENC_SINGLE, 0xAB, 0, false, false, false, 0}, // 64-bit store (with REX.W)
 
     // String prefixes
     {"rep", ENC_SINGLE, 0xF3, 0, false, false, false, 0},
@@ -351,35 +359,88 @@ uint8_t register_to_modrm(register_t reg)
     case REG_AL:
     case REG_AX:
     case REG_EAX:
+    case REG_RAX:
         return 0;
     case REG_CL:
     case REG_CX:
     case REG_ECX:
+    case REG_RCX:
         return 1;
     case REG_DL:
     case REG_DX:
     case REG_EDX:
+    case REG_RDX:
         return 2;
     case REG_BL:
     case REG_BX:
     case REG_EBX:
+    case REG_RBX:
         return 3;
     case REG_AH:
     case REG_SP:
     case REG_ESP:
+    case REG_RSP:
+    case REG_SPL:
         return 4;
     case REG_CH:
     case REG_BP:
     case REG_EBP:
+    case REG_RBP:
+    case REG_BPL:
         return 5;
     case REG_DH:
     case REG_SI:
     case REG_ESI:
+    case REG_RSI:
+    case REG_SIL:
         return 6;
     case REG_BH:
     case REG_DI:
     case REG_EDI:
-        return 7; // Segment registers
+    case REG_RDI:
+    case REG_DIL:
+        return 7;
+    // R8-R15 registers (need REX.R or REX.B bit set)
+    case REG_R8:
+    case REG_R8B:
+    case REG_R8W:
+    case REG_R8D:
+        return 0;  // R8 = ModR/M 0 + REX.R/B bit
+    case REG_R9:
+    case REG_R9B:
+    case REG_R9W:
+    case REG_R9D:
+        return 1;  // R9 = ModR/M 1 + REX.R/B bit
+    case REG_R10:
+    case REG_R10B:
+    case REG_R10W:
+    case REG_R10D:
+        return 2;  // R10 = ModR/M 2 + REX.R/B bit
+    case REG_R11:
+    case REG_R11B:
+    case REG_R11W:
+    case REG_R11D:
+        return 3;  // R11 = ModR/M 3 + REX.R/B bit
+    case REG_R12:
+    case REG_R12B:
+    case REG_R12W:
+    case REG_R12D:
+        return 4;  // R12 = ModR/M 4 + REX.R/B bit
+    case REG_R13:
+    case REG_R13B:
+    case REG_R13W:
+    case REG_R13D:
+        return 5;  // R13 = ModR/M 5 + REX.R/B bit
+    case REG_R14:
+    case REG_R14B:
+    case REG_R14W:
+    case REG_R14D:
+        return 6;  // R14 = ModR/M 6 + REX.R/B bit
+    case REG_R15:
+    case REG_R15B:
+    case REG_R15W:
+    case REG_R15D:
+        return 7;  // R15 = ModR/M 7 + REX.R/B bit// Segment registers
     case REG_ES:
         return 0;
     case REG_CS:
@@ -426,6 +487,18 @@ int get_register_size(register_t reg)
     case REG_CH:
     case REG_DL:
     case REG_DH:
+    case REG_SIL:
+    case REG_DIL:
+    case REG_BPL:
+    case REG_SPL:
+    case REG_R8B:
+    case REG_R9B:
+    case REG_R10B:
+    case REG_R11B:
+    case REG_R12B:
+    case REG_R13B:
+    case REG_R14B:
+    case REG_R15B:
         return 8;
     case REG_AX:
     case REG_BX:
@@ -441,6 +514,14 @@ int get_register_size(register_t reg)
     case REG_SS:
     case REG_FS:
     case REG_GS:
+    case REG_R8W:
+    case REG_R9W:
+    case REG_R10W:
+    case REG_R11W:
+    case REG_R12W:
+    case REG_R13W:
+    case REG_R14W:
+    case REG_R15W:
         return 16;
     case REG_EAX:
     case REG_EBX:
@@ -450,7 +531,32 @@ int get_register_size(register_t reg)
     case REG_EDI:
     case REG_EBP:
     case REG_ESP:
+    case REG_R8D:
+    case REG_R9D:
+    case REG_R10D:
+    case REG_R11D:
+    case REG_R12D:
+    case REG_R13D:
+    case REG_R14D:
+    case REG_R15D:
         return 32;
+    case REG_RAX:
+    case REG_RBX:
+    case REG_RCX:
+    case REG_RDX:
+    case REG_RSI:
+    case REG_RDI:
+    case REG_RBP:
+    case REG_RSP:
+    case REG_R8:
+    case REG_R9:
+    case REG_R10:
+    case REG_R11:
+    case REG_R12:
+    case REG_R13:
+    case REG_R14:
+    case REG_R15:
+        return 64;
     // Control registers (32-bit)
     case REG_CR0:
     case REG_CR1:
@@ -458,12 +564,92 @@ int get_register_size(register_t reg)
     case REG_CR3:
     case REG_CR4:
     case REG_CR5:
-    case REG_CR6:
-    case REG_CR7:
+    case REG_CR6:    case REG_CR7:
         return 32;
     default:
         return 0;
     }
+}
+
+// REX prefix functions
+bool is_extended_register(register_t reg)
+{
+    switch (reg)
+    {
+    case REG_R8: case REG_R9: case REG_R10: case REG_R11:
+    case REG_R12: case REG_R13: case REG_R14: case REG_R15:
+    case REG_R8B: case REG_R9B: case REG_R10B: case REG_R11B:
+    case REG_R12B: case REG_R13B: case REG_R14B: case REG_R15B:
+    case REG_R8W: case REG_R9W: case REG_R10W: case REG_R11W:
+    case REG_R12W: case REG_R13W: case REG_R14W: case REG_R15W:
+    case REG_R8D: case REG_R9D: case REG_R10D: case REG_R11D:
+    case REG_R12D: case REG_R13D: case REG_R14D: case REG_R15D:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool is_64bit_register(register_t reg)
+{
+    switch (reg)
+    {
+    case REG_RAX: case REG_RBX: case REG_RCX: case REG_RDX:
+    case REG_RSI: case REG_RDI: case REG_RBP: case REG_RSP:
+    case REG_R8: case REG_R9: case REG_R10: case REG_R11:
+    case REG_R12: case REG_R13: case REG_R14: case REG_R15:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool needs_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mode_t mode)
+{
+    if (mode != MODE_64BIT)
+        return false;
+    
+    return is_64bit_register(reg1) || is_extended_register(reg1) ||
+           is_64bit_register(reg2) || is_extended_register(reg2) ||
+           is_64bit_register(reg3) || is_extended_register(reg3) ||
+           reg1 == REG_SIL || reg1 == REG_DIL || reg1 == REG_BPL || reg1 == REG_SPL ||
+           reg2 == REG_SIL || reg2 == REG_DIL || reg2 == REG_BPL || reg2 == REG_SPL ||
+           reg3 == REG_SIL || reg3 == REG_DIL || reg3 == REG_BPL || reg3 == REG_SPL;
+}
+
+rex_prefix_t calculate_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mode_t mode)
+{
+    rex_prefix_t rex = { false, false, false, false, false };
+    
+    if (mode != MODE_64BIT)
+        return rex;
+    
+    rex.present = needs_rex_prefix(reg1, reg2, reg3, mode);
+    
+    if (!rex.present)
+        return rex;
+    
+    rex.w = is_64bit_register(reg1) || is_64bit_register(reg2) || is_64bit_register(reg3);
+    rex.r = is_extended_register(reg1);
+    rex.x = is_extended_register(reg3);
+    rex.b = is_extended_register(reg2);
+    
+    return rex;
+}
+
+uint8_t encode_rex_prefix(const rex_prefix_t *rex)
+{
+    if (!rex->present)
+        return 0;
+    
+    uint8_t prefix = REX_PREFIX_BASE;
+    
+    if (rex->w) prefix |= 0x08;
+    if (rex->r) prefix |= 0x04;
+    if (rex->x) prefix |= 0x02;
+    if (rex->b) prefix |= 0x01;
+    
+    return prefix;
 }
 
 static bool encode_single_byte(const instruction_t *instr, uint8_t *buffer, size_t *size)
@@ -509,12 +695,20 @@ static bool encode_push_imm(const instruction_t *instr, uint8_t *buffer, size_t 
         *size = 2;
     }
     else
-    {
-        // Push immediate - size depends on mode
+    {        // Push immediate - size depends on mode
         buffer[0] = 0x68;
         if (asm_ctx->mode == MODE_32BIT)
         {
             // 32-bit mode: use 32-bit immediate (5 bytes total)
+            buffer[1] = (uint8_t)(value & 0xFF);
+            buffer[2] = (uint8_t)((value >> 8) & 0xFF);
+            buffer[3] = (uint8_t)((value >> 16) & 0xFF);
+            buffer[4] = (uint8_t)((value >> 24) & 0xFF);
+            *size = 5;
+        }
+        else if (asm_ctx->mode == MODE_64BIT)
+        {
+            // 64-bit mode: also use 32-bit immediate (sign-extended)
             buffer[1] = (uint8_t)(value & 0xFF);
             buffer[2] = (uint8_t)((value >> 8) & 0xFF);
             buffer[3] = (uint8_t)((value >> 16) & 0xFF);
@@ -703,9 +897,13 @@ static bool encode_mov_reg_reg(const instruction_t *instr, uint8_t *buffer, size
     {
         buffer[0] = 0x88; // MOV r/m8, r8
     }
+    else if (dst_size == 64)
+    {
+        buffer[0] = 0x89; // MOV r/m64, r64 (REX.W will be added by caller)
+    }
     else
     {
-        buffer[0] = 0x89; // MOV r/m16, r16
+        buffer[0] = 0x89; // MOV r/m16, r16 or MOV r/m32, r32
     }
 
     buffer[1] = make_modrm(3, src_code, dst_code); // mod=11 (register), reg=src, r/m=dst
@@ -723,7 +921,7 @@ static bool encode_mov_reg_imm(const instruction_t *instr, uint8_t *buffer, size
     }
 
     register_t reg = instr->operands[0].value.reg;
-    int32_t value = instr->operands[1].value.immediate;
+    int64_t value = instr->operands[1].value.immediate;
     uint8_t reg_code = register_to_modrm(reg);
 
     int reg_size = get_register_size(reg);
@@ -757,6 +955,21 @@ static bool encode_mov_reg_imm(const instruction_t *instr, uint8_t *buffer, size
             buffer[4] = (uint8_t)((value >> 24) & 0xFF);
             *size = 5;
         }
+    }
+    else if (reg_size == 64)
+    {
+        // 64-bit register - use REX.W prefix + MOV r64, imm64
+        // Note: REX prefix is handled by the calling function
+        buffer[0] = 0xB8 + reg_code; // MOV r64, imm64
+        buffer[1] = (uint8_t)(value & 0xFF);
+        buffer[2] = (uint8_t)((value >> 8) & 0xFF);
+        buffer[3] = (uint8_t)((value >> 16) & 0xFF);
+        buffer[4] = (uint8_t)((value >> 24) & 0xFF);
+        buffer[5] = (uint8_t)((value >> 32) & 0xFF);
+        buffer[6] = (uint8_t)((value >> 40) & 0xFF);
+        buffer[7] = (uint8_t)((value >> 48) & 0xFF);
+        buffer[8] = (uint8_t)((value >> 56) & 0xFF);
+        *size = 9;
     }
     else
     {
@@ -1247,7 +1460,7 @@ static bool encode_arith_reg_imm(const instruction_t *instr, uint8_t *buffer, si
     }
 
     register_t reg = instr->operands[0].value.reg;
-    int32_t value = instr->operands[1].value.immediate;
+    int64_t value = instr->operands[1].value.immediate;
     uint8_t reg_code = register_to_modrm(reg);
     int reg_size = get_register_size(reg);
 
@@ -1290,8 +1503,37 @@ static bool encode_arith_reg_imm(const instruction_t *instr, uint8_t *buffer, si
         return false; // Unsupported arithmetic instruction
     }
 
+    // Handle 64-bit operands (REX.W will be added by caller)
+    if (reg_size == 64)
+    {
+        // Check if we can use 8-bit immediate (sign-extended)
+        if (value >= -128 && value <= 127)
+        {
+            // Use 8-bit immediate (sign-extended) - opcode 0x83
+            buffer[0] = 0x83;
+            buffer[1] = make_modrm(3, modrm_reg, reg_code);
+            buffer[2] = (uint8_t)value;
+            *size = 3;
+        }
+        else if (value >= -2147483648LL && value <= 2147483647LL)
+        {
+            // 64-bit register with 32-bit immediate (sign-extended) - opcode 0x81
+            buffer[0] = 0x81;
+            buffer[1] = make_modrm(3, modrm_reg, reg_code);
+            buffer[2] = (uint8_t)(value & 0xFF);
+            buffer[3] = (uint8_t)((value >> 8) & 0xFF);
+            buffer[4] = (uint8_t)((value >> 16) & 0xFF);
+            buffer[5] = (uint8_t)((value >> 24) & 0xFF);
+            *size = 6;
+        }
+        else
+        {
+            // Cannot fit in 32-bit immediate - this is an error for arithmetic instructions
+            return false;
+        }
+    }
     // Handle 32-bit operands
-    if (reg_size == 32)
+    else if (reg_size == 32)
     {
         // Check if we can use 8-bit immediate (sign-extended)
         if (value >= -128 && value <= 127)
@@ -2385,13 +2627,101 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                                prefix, instr->operands[i].value.memory.segment);
                     }
                     break; // Only one segment override per instruction
+                }            }
+        }
+    }
+
+    // Handle operand size override for 16-bit operations in 64-bit mode
+    bool needs_operand_size_override = false;
+    if (asm_ctx->mode == MODE_64BIT)
+    {
+        // Check for 16-bit string operations
+        if (strcasecmp(instr->mnemonic, "movsw") == 0 ||
+            strcasecmp(instr->mnemonic, "cmpsw") == 0 ||
+            strcasecmp(instr->mnemonic, "scasw") == 0 ||
+            strcasecmp(instr->mnemonic, "lodsw") == 0 ||
+            strcasecmp(instr->mnemonic, "stosw") == 0)
+        {
+            needs_operand_size_override = true;
+        }
+        // Check if any operand is a 16-bit register
+        else if (instr->operand_count >= 1)
+        {
+            for (int i = 0; i < instr->operand_count; i++)
+            {
+                if (instr->operands[i].type == OPERAND_REGISTER)
+                {
+                    int reg_size = get_register_size(instr->operands[i].value.reg);
+                    if (reg_size == 16)
+                    {
+                        needs_operand_size_override = true;
+                        break;
+                    }
                 }
             }
         }
     }
+    
+    if (needs_operand_size_override)
+    {
+        buffer[prefix_size] = 0x66;  // Operand size override prefix
+        prefix_size++;
+        if (asm_ctx->verbose)
+        {
+            printf("DEBUG: Emitting operand size override prefix 0x66\n");
+        }
+    }
+
+    // Handle REX prefix for 64-bit mode
+    size_t rex_offset = prefix_size;
+    if (asm_ctx->mode == MODE_64BIT)
+    {
+        register_t reg1 = REG_NONE, reg2 = REG_NONE, reg3 = REG_NONE;
+        
+        // Extract registers from operands for REX calculation
+        // For MOV reg, reg: reg1 = source (REX.R), reg2 = destination (REX.B)
+        if (instr->operand_count >= 2 && instr->operands[1].type == OPERAND_REGISTER)
+            reg1 = instr->operands[1].value.reg;  // source register (REX.R)
+        if (instr->operand_count >= 1 && instr->operands[0].type == OPERAND_REGISTER)
+            reg2 = instr->operands[0].value.reg;  // destination register (REX.B)
+        if (instr->operand_count >= 1 && instr->operands[0].type == OPERAND_MEMORY)
+        {
+            reg2 = instr->operands[0].value.memory.base;
+            reg3 = instr->operands[0].value.memory.index;
+        }
+        
+        // Check for 64-bit string operations that need REX.W
+        bool needs_rex_w = false;
+        if (strcasecmp(instr->mnemonic, "movsq") == 0 || 
+            strcasecmp(instr->mnemonic, "cmpsq") == 0 ||
+            strcasecmp(instr->mnemonic, "scasq") == 0 ||
+            strcasecmp(instr->mnemonic, "lodsq") == 0 ||
+            strcasecmp(instr->mnemonic, "stosq") == 0)
+        {
+            needs_rex_w = true;
+        }
+        
+        rex_prefix_t rex = calculate_rex_prefix(reg1, reg2, reg3, asm_ctx->mode);
+        if (needs_rex_w) 
+        {
+            rex.w = true;
+            rex.present = true;  // Force REX prefix for 64-bit operations
+        }
+        
+        if (rex.present)
+        {
+            buffer[rex_offset] = encode_rex_prefix(&rex);
+            prefix_size++;
+            if (asm_ctx->verbose)
+            {
+                printf("DEBUG: Emitting REX prefix 0x%02X\n", buffer[rex_offset]);
+            }
+        }
+    }
+    
     // Use a temporary buffer for the main instruction, then copy to final buffer with prefix
     uint8_t temp_buffer[16];
-    size_t temp_size = 0; // Handle far pointer calls and jumps: jmp seg:off, call seg:off
+    size_t temp_size = 0;// Handle far pointer calls and jumps: jmp seg:off, call seg:off
     if (instr->operand_count == 1 && instr->operands[0].type == OPERAND_FARPTR)
     {
         uint16_t offset = instr->operands[0].value.far_ptr.offset;

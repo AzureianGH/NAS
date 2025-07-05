@@ -25,6 +25,23 @@ typedef enum
     ENC_SPECIAL     // Special handling required
 } encoding_type_t;
 
+// REX prefix bits (for 64-bit mode)
+#define REX_PREFIX_BASE 0x40
+#define REX_W           0x48  // 64-bit operand size
+#define REX_R           0x44  // Extension of ModR/M reg field
+#define REX_X           0x42  // Extension of SIB index field
+#define REX_B           0x41  // Extension of ModR/M rm field, SIB base field, or opcode reg field
+
+// REX prefix structure
+typedef struct
+{
+    bool present;
+    bool w; // 64-bit operand size
+    bool r; // Extension of ModR/M reg field
+    bool x; // Extension of SIB index field
+    bool b; // Extension of ModR/M rm field
+} rex_prefix_t;
+
 // Instruction definition
 typedef struct
 {
@@ -47,6 +64,13 @@ uint8_t make_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
 uint8_t register_to_modrm(register_t reg);
 uint8_t get_base_index_rm(register_t base_reg, register_t index_reg);
 int get_register_size(register_t reg);
+
+// REX prefix functions
+rex_prefix_t calculate_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mode_t mode);
+uint8_t encode_rex_prefix(const rex_prefix_t *rex);
+bool needs_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mode_t mode);
+bool is_extended_register(register_t reg);
+bool is_64bit_register(register_t reg);
 
 // Opcode generation
 bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx);

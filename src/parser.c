@@ -46,7 +46,7 @@ bool parser_expect_token(parser_t *parser, token_type_t type)
     return false;
 }
 
-int32_t parser_parse_immediate(parser_t *parser)
+int64_t parser_parse_immediate(parser_t *parser)
 {
     if (parser->current_token.type != TOKEN_IMMEDIATE)
     {
@@ -54,16 +54,16 @@ int32_t parser_parse_immediate(parser_t *parser)
     }
 
     char *value_str = parser->current_token.value;
-    int32_t value;
+    int64_t value;
 
     // Handle hex numbers
     if (strncmp(value_str, "0x", 2) == 0 || strncmp(value_str, "0X", 2) == 0)
     {
-        value = (int32_t)strtol(value_str, NULL, 16);
+        value = (int64_t)strtoll(value_str, NULL, 16);
     }
     else
     {
-        value = (int32_t)strtol(value_str, NULL, 10);
+        value = (int64_t)strtoll(value_str, NULL, 10);
     }
 
     parser_advance(parser);
@@ -363,19 +363,19 @@ bool parser_parse_directive(parser_t *parser)
                             parser->current_token.line);
             return false;
         } // Handle width directive
-    }
-    else if (strcmp(directive, "#width") == 0)
+    }    else if (strcmp(directive, "#width") == 0)
     {
         if (parser->current_token.type == TOKEN_IMMEDIATE)
         {
             int width = parser_parse_immediate(parser);
-            if (width != 16 && width != 32)
+            if (width != 16 && width != 32 && width != 64)
             {
-                assembler_error(parser->assembler, "Invalid width value %d at line %d. Must be 16 or 32",
+                assembler_error(parser->assembler, "Invalid width value %d at line %d. Must be 16, 32, or 64",
                                 width, parser->current_token.line);
                 return false;
             }
-            asm_mode_t directive_mode = (width == 32) ? MODE_32BIT : MODE_16BIT;
+            asm_mode_t directive_mode = (width == 32) ? MODE_32BIT : 
+                                      (width == 64) ? MODE_64BIT : MODE_16BIT;
 
             // Check for conflict with command line mode if both are set and bit change is not allowed
             if (parser->assembler->cmdline_mode_set &&
@@ -395,7 +395,7 @@ bool parser_parse_directive(parser_t *parser)
             assembler_error(parser->assembler, "Expected immediate value after #width directive at line %d",
                             parser->current_token.line);
             return false;
-        } // Handle db (define byte) directive
+        }// Handle db (define byte) directive
     }
     else if (strcmp(directive, "#db") == 0)
     {
