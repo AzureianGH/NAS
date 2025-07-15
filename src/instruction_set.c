@@ -1,4 +1,5 @@
 #include "nas.h"
+#include "assembler.h"
 #include <string.h>
 
 // Instruction definitions for 16-bit x86
@@ -1679,17 +1680,38 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                     section_type_t section_type = current_section ? current_section->type : SECTION_TEXT;
                     uint32_t offset_in_section = current_addr - (current_section ? current_section->address : 0);
 
-                    // Determine relocation type based on instruction
-                    int relocation_type = R_386_PC32; // Default for call/jmp (PC-relative)
+                    // Determine relocation type based on instruction and mode
+                    int relocation_type;
+                    if (asm_ctx->mode == MODE_64BIT) {
+                        // For 64-bit mode, use PLT32 for call instructions to external symbols
+                        if (strcasecmp(instr->mnemonic, "call") == 0) {
+                            relocation_type = R_X86_64_PLT32; // Use PLT for external function calls
+                        } else {
+                            relocation_type = R_X86_64_PC32; // PC-relative for jumps
+                        }
+                    } else {
+                        relocation_type = R_386_PC32; // PC-relative for x86
+                    }
 
                     if (asm_ctx->verbose)
                     {
-                        printf("DEBUG: Adding relocation for external symbol '%s' at offset 0x%X in section %d, type R_386_PC32\n",
-                               symbol->name, offset_in_section + 1, section_type); // +1 to point to displacement field
+                        const char *reloc_type_str = "unknown";
+                        if (asm_ctx->mode == MODE_64BIT) {
+                            reloc_type_str = (relocation_type == R_X86_64_PLT32) ? "R_X86_64_PLT32" : "R_X86_64_PC32";
+                        } else {
+                            reloc_type_str = "R_386_PC32";
+                        }
+                        printf("DEBUG: Adding relocation for external symbol '%s' at offset 0x%X in section %d, type %s\n",
+                               symbol->name, offset_in_section + 1, section_type, reloc_type_str);
                     }
 
                     // Add relocation entry pointing to the displacement field (after opcode)
-                    relocation_add(asm_ctx, offset_in_section + 1, symbol->name, relocation_type, section_type);
+                    int64_t addend = (relocation_type == R_X86_64_PLT32) ? -4 : 0;
+                    relocation_add(asm_ctx, offset_in_section + 1, symbol->name, relocation_type, section_type, addend);
+                    
+                    // For external symbols, emit zero displacement (addend is in relocation record)
+                    target_addr = current_addr + ((asm_ctx->mode == MODE_32BIT || asm_ctx->mode == MODE_64BIT) ? 5 : 3);
+                    target_available = true;
                 }
             }
         }
@@ -1702,7 +1724,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                        asm_ctx->pass, (uint32_t)instr->operands[0].value.immediate, instr->mnemonic);
             }
             target_addr = (uint32_t)instr->operands[0].value.immediate;
-            target_available = true;
+            target_available = true; // fuck
         }
 
         if (target_available)
@@ -1712,9 +1734,9 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             if (def->opcode == 0xE8)
             { // CALL rel - size depends on mode
                 uint32_t instruction_size;
-                if (asm_ctx->mode == MODE_32BIT)
+                if (asm_ctx->mode == MODE_32BIT || asm_ctx->mode == MODE_64BIT)
                 {
-                    instruction_size = 5; // 32-bit mode: opcode + 32-bit displacement
+                    instruction_size = 5; // 32-bit and 64-bit modes: opcode + 32-bit displacement
                 }
                 else
                 {
@@ -1734,9 +1756,9 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 }
 
                 buffer[0] = def->opcode;
-                if (asm_ctx->mode == MODE_32BIT)
+                if (asm_ctx->mode == MODE_32BIT || asm_ctx->mode == MODE_64BIT)
                 {
-                    // 32-bit mode: emit 32-bit displacement (5 bytes total)
+                    // 32-bit and 64-bit modes: emit 32-bit displacement (5 bytes total)
                     buffer[1] = (uint8_t)(displacement & 0xFF);
                     buffer[2] = (uint8_t)((displacement >> 8) & 0xFF);
                     buffer[3] = (uint8_t)((displacement >> 16) & 0xFF);
@@ -1855,9 +1877,9 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
             {
                 // CALL instruction - size depends on mode
                 buffer[0] = def->opcode;
-                if (asm_ctx->mode == MODE_32BIT)
+                if (asm_ctx->mode == MODE_32BIT || asm_ctx->mode == MODE_64BIT)
                 {
-                    // 32-bit mode: emit 32-bit displacement placeholder (5 bytes total)
+                    // 32-bit and 64-bit modes: emit 32-bit displacement placeholder (5 bytes total)
                     buffer[1] = 0x00; // Placeholder displacement byte 1
                     buffer[2] = 0x00; // Placeholder displacement byte 2
                     buffer[3] = 0x00; // Placeholder displacement byte 3
@@ -2011,10 +2033,13 @@ static bool encode_inc_dec(const instruction_t *instr, uint8_t *buffer, size_t *
         // Handle register operands
         register_t reg = instr->operands[0].value.reg;
         uint8_t reg_code = register_to_modrm(reg);
+        int reg_size = get_register_size(reg);
 
-        // For 16-bit registers, use short form (INC/DEC reg16)
-        if (get_register_size(reg) == 16)
+        // In 64-bit mode, the one-byte INC/DEC opcodes (0x40-0x4F) are repurposed as REX prefixes
+        // So we must use the longer form with ModR/M byte for all register sizes in 64-bit mode
+        if (reg_size == 16 && asm_ctx->mode != MODE_64BIT)
         {
+            // For 16-bit registers in 16-bit or 32-bit mode, use short form (INC/DEC reg16)
             if (strcasecmp(instr->mnemonic, "inc") == 0)
             {
                 buffer[0] = 0x40 + reg_code; // INC reg16
@@ -2027,17 +2052,19 @@ static bool encode_inc_dec(const instruction_t *instr, uint8_t *buffer, size_t *
         }
         else
         {
-            // For 8-bit registers, use ModR/M form
-            if (strcasecmp(instr->mnemonic, "inc") == 0)
+            // For all other cases, use ModR/M form
+            uint8_t modrm_reg = strcasecmp(instr->mnemonic, "inc") == 0 ? 0 : 1; // INC=0, DEC=1
+            
+            if (reg_size == 8)
             {
-                buffer[0] = 0xFE;
-                buffer[1] = make_modrm(3, 0, reg_code); // INC r/m8
+                buffer[0] = 0xFE; // INC/DEC r/m8
             }
             else
             {
-                buffer[0] = 0xFE;
-                buffer[1] = make_modrm(3, 1, reg_code); // DEC r/m8
+                buffer[0] = 0xFF; // INC/DEC r/m16/32/64
             }
+            
+            buffer[1] = make_modrm(3, modrm_reg, reg_code);
             *size = 2;
         }
         return true;
@@ -2895,9 +2922,10 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                     section_type_t section_type = current_section ? current_section->type : SECTION_TEXT;
                     uint32_t section_offset = asm_ctx->current_address - (current_section ? current_section->address : 0);
 
-                    // Add R_386_32 relocation for absolute addressing (pointing to immediate field after opcode)
+                    // Add relocation for absolute addressing (pointing to immediate field after opcode)
+                    int relocation_type = (asm_ctx->mode == MODE_64BIT) ? R_X86_64_32S : R_386_32;
                     relocation_add(asm_ctx, section_offset + prefix_size + 1,
-                                   instr->operands[0].value.label, R_386_32, section_type);
+                                   instr->operands[0].value.label, relocation_type, section_type, 0);
                     result = true;
                 }
             }

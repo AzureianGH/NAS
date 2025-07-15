@@ -1,8 +1,6 @@
 #width 64
-#global main
-#extend exit
-
-
+exit:
+    nop
 main:
     xor rdi, rdi
     mov edi, 123

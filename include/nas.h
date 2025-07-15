@@ -247,6 +247,7 @@ typedef struct relocation
     uint32_t offset;          // Offset within section where relocation applies
     char symbol_name[MAX_LABEL_LENGTH]; // Name of symbol being relocated
     int relocation_type;      // Type of relocation (R_386_PC32, R_386_32, etc.)
+    int64_t addend;           // Addend for RELA relocations (0 for REL)
     section_type_t section;   // Which section this relocation belongs to
     struct relocation *next;
 } relocation_t;

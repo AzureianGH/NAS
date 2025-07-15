@@ -3,6 +3,22 @@
 
 #include "nas.h"
 
+// Relocation types
+// i386 relocation types
+#define R_386_NONE 0 // No reloc
+#define R_386_32 1   // Direct 32 bit
+#define R_386_PC32 2 // PC relative 32 bit
+
+// x86-64 relocation types
+// x86-64 relocation types
+#define R_X86_64_NONE 0     // No reloc
+#define R_X86_64_64 1       // Direct 64 bit
+#define R_X86_64_PC32 2     // PC relative 32 bit signed
+#define R_X86_64_GOT32 3    // 32 bit GOT entry
+#define R_X86_64_PLT32 4    // 32 bit PLT address
+#define R_X86_64_32 10      // Direct 32 bit zero extended
+#define R_X86_64_32S 11     // Direct 32 bit sign extended
+
 // Assembler functions
 assembler_t *assembler_create(void);
 void assembler_destroy(assembler_t *asm_ctx);
@@ -38,7 +54,7 @@ bool output_write_hex(assembler_t *asm_ctx);
 bool output_write_elf(assembler_t *asm_ctx);
 
 // Relocation management functions
-void relocation_add(assembler_t *asm_ctx, uint32_t offset, const char *symbol_name, int relocation_type, section_type_t section);
+void relocation_add(assembler_t *asm_ctx, uint32_t offset, const char *symbol_name, int relocation_type, section_type_t section, int64_t addend);
 void relocation_table_destroy(relocation_t *relocations);
 
 // Error handling
