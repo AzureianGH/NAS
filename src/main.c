@@ -4,12 +4,21 @@
 void print_version()
 {
 #ifdef _WIN32
-    printf("nas [nas-win-x64] ntos(6.2025.2.1) - 2.10\n");
+    #ifdef __x86_64__
+    printf("nas [nas-win-x64] ntos(7.2025.3.0) - 3.00\n");
+    #else
+    printf("nas [nas-win-x86] ntos(7.2025.3.0) - 3.00\n");
+    #endif
     printf("Copyright (C) 2025 Nathan's Compiler Collection\n");
     printf("This is free software; see the source for copying conditions.  There is NO\n");
     printf("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n");
+    
 #else
-    printf("nas [nas-linux-x64] any-linux(6.2025.2.1) - 2.10\n");
+    #ifdef __x86_64__
+    printf("nas [nas-linux-x64] linux-based(7.2025.3.0) - 3.00\n");
+    #else
+    printf("nas [nas-linux-x86] linux-based(7.2025.3.0) - 3.00\n");
+    #endif
     printf("Copyright (C) 2025 Nathan's Compiler Collection\n");
     printf("This is free software; see the source for copying conditions.  There is NO\n");
     printf("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\r");

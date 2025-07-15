@@ -1,8 +1,10 @@
 {
     "files.associations": {
+        "*.json": "json",
         "getopt.h": "c",
         "ctype.h": "c",
-        "nas.h": "c"
+        "nas.h": "c",
+        "unistd.h": "c"
     },
     "makefile.configureOnOpen": false
 }

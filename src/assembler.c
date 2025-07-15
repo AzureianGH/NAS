@@ -7,6 +7,7 @@
 #define usleep(x) Sleep((x)/1000)
 #else
 #include <unistd.h>
+#define usleep(x)
 #endif
 
 assembler_t *assembler_create(void)
