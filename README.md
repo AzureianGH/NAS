@@ -1,11 +1,11 @@
 # NAS (Nathan's Assembler)
 
-A feature-rich x86 assembler written in C that supports 16-bit and 32-bit assembly programming. NAS is designed to generate efficient machine code for bootloaders, operating systems, and low-level programming projects.
+A feature-rich x86 assembler written in C that supports 16-bit, 32-bit, and 64-bit assembly programming. NAS is designed to generate efficient machine code for bootloaders, operating systems, and low-level programming projects.
 
 ## Features
 
 ### Core Assembly Support
-- **Multi-mode support**: 16-bit and 32-bit x86 assembly
+- **Multi-mode support**: 16-bit, 32-bit, and 64-bit x86 assembly
 - **Two-pass assembler**: Resolves forward references and optimizes code generation
 - **Multiple output formats**: Binary and Intel HEX
 - **Cross-platform**: Windows and Linux compatible
@@ -242,7 +242,7 @@ Use `-v` flag for detailed assembly information:
 - Selected 80386 features (immediate shifts)
 
 ### Platform Support
-- **Windows**: Native compilation with MinGW or Visual Studio
+- **Windows**: Native compilation with MinGW
 - **Linux**: GCC compilation
 - **Cross-platform**: Consistent behavior across platforms
 
@@ -284,9 +284,9 @@ NAS is free software distributed under the terms specified in the source code. S
 
 ## Version Information
 
-Current version: 1.00
-- Windows build: `nas-win-x64`
-- Linux build: `nas-linux-x64`
+Current version: 3.00
+- Windows build: `nas-win-x64` || `nas-win-x86`
+- Linux build: `nas-linux-x64` || `nas-linux-x86`
 
 For version information, run:
 ```bash
