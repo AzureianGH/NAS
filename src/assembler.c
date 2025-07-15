@@ -232,6 +232,8 @@ bool symbol_define(assembler_t *asm_ctx, const char *name, uint32_t address)
     new_symbol->name[MAX_LABEL_LENGTH - 1] = '\0';
     new_symbol->address = address;
     new_symbol->defined = true;
+    new_symbol->global = false;  // Initialize global flag
+    new_symbol->external = false; // Initialize external flag
     new_symbol->section = asm_ctx->current_section_ptr ? asm_ctx->current_section_ptr->type : SECTION_TEXT;
     new_symbol->next = asm_ctx->symbols;
     asm_ctx->symbols = new_symbol;
@@ -268,7 +270,9 @@ bool symbol_reference(assembler_t *asm_ctx, const char *name)
     new_symbol->name[MAX_LABEL_LENGTH - 1] = '\0';
     new_symbol->address = 0;
     new_symbol->defined = false;
-    new_symbol->section = SECTION_TEXT; // Default section for undefined symbols
+    new_symbol->global = false;  // Initialize global flag
+    new_symbol->external = false; // Initialize external flag
+    new_symbol->section = SECTION_UNDEF; // Undefined symbols have no section
     new_symbol->next = asm_ctx->symbols;
     asm_ctx->symbols = new_symbol;
 
@@ -932,7 +936,7 @@ static bool output_write_elf32(assembler_t *asm_ctx)
             {
                 elf_sym.st_shndx = 3; // .bss is section 3
             }
-            else
+            else // SECTION_UNDEF or other undefined sections
             {
                 elf_sym.st_shndx = SHN_UNDEF; // Undefined section
             }
@@ -993,7 +997,7 @@ static bool output_write_elf32(assembler_t *asm_ctx)
             {
                 elf_sym.st_shndx = 3; // .bss is section 3
             }
-            else
+            else // SECTION_UNDEF or other undefined sections
             {
                 elf_sym.st_shndx = SHN_UNDEF; // Undefined section
             }
@@ -1632,7 +1636,7 @@ static bool output_write_elf64(assembler_t *asm_ctx)
             {
                 elf_sym.st_shndx = 3; // .bss is section 3
             }
-            else
+            else // SECTION_UNDEF or other undefined sections
             {
                 elf_sym.st_shndx = SHN_UNDEF; // Undefined section
             }
@@ -1694,7 +1698,7 @@ static bool output_write_elf64(assembler_t *asm_ctx)
             {
                 elf_sym.st_shndx = 3; // .bss is section 3
             }
-            else
+            else // SECTION_UNDEF or other undefined sections
             {
                 elf_sym.st_shndx = SHN_UNDEF; // Undefined section
             }
@@ -2513,7 +2517,8 @@ bool section_switch(assembler_t *asm_ctx, const char *name)
 
     asm_ctx->current_section_ptr = section;
 
-    // Update current address to the section's current position
+    // During assembly, use section-relative addresses
+    // The current_address should be the section's base address plus current size
     asm_ctx->current_address = section->address + section->size;
 
     return true;

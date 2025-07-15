@@ -697,7 +697,12 @@ bool parser_parse_directive(parser_t *parser)
                 }
                 existing_section = new_section;
             } // Switch to the section
-            parser->assembler->current_section_ptr = existing_section;
+            if (!section_switch(parser->assembler, section_name))
+            {
+                assembler_error(parser->assembler, "Failed to switch to section '%s' at line %d",
+                                section_name, parser->current_token.line);
+                return false;
+            }
         }
         else
         {

@@ -214,7 +214,8 @@ typedef enum
 {
     SECTION_TEXT,    // .text - executable code
     SECTION_DATA,    // .data - initialized data  
-    SECTION_BSS      // .bss - uninitialized data
+    SECTION_BSS,     // .bss - uninitialized data
+    SECTION_UNDEF    // undefined section for external symbols
 } section_type_t;
 
 // Section information

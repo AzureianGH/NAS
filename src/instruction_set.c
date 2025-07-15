@@ -102,7 +102,7 @@ static const instruction_def_t instruction_table[] = { // Data movement
     {"loopz", ENC_JMP_REL, 0xE1, 0, false, true, true, 1}, // Same as LOOPE
     {"loopne", ENC_JMP_REL, 0xE0, 0, false, true, true, 1},
     {"loopnz", ENC_JMP_REL, 0xE0, 0, false, true, true, 1}, // Same as LOOPNE
-    {"jcxz", ENC_JMP_REL, 0xE3, 0, false, true, true, 1},    // String operations
+    {"jcxz", ENC_JMP_REL, 0xE3, 0, false, true, true, 1},   // String operations
     {"movsb", ENC_SINGLE, 0xA4, 0, false, false, false, 0},
     {"movsw", ENC_SINGLE, 0xA5, 0, false, false, false, 0},
     {"movsd", ENC_SINGLE, 0xA5, 0, false, false, false, 0}, // 32-bit move
@@ -204,6 +204,14 @@ static const instruction_def_t instruction_table[] = { // Data movement
     // Stack operations - push/pop all registers
     {"pusha", ENC_SINGLE, 0x60, 0, false, false, false, 0}, // Push all general purpose registers
     {"popa", ENC_SINGLE, 0x61, 0, false, false, false, 0},  // Pop all general purpose registers
+
+    // Special x86
+    {"sysenter", ENC_SPECIAL, 0x0F34, 0, false, false, false, 0}, // System call entry (x86)
+    {"sysexit", ENC_SPECIAL, 0x0F35, 0, false, false, false, 0},  // System call exit (x86)
+
+    // Special x64
+    {"syscall", ENC_SPECIAL, 0x0F05, 0, false, false, false, 0}, // System call (x64)
+    {"sysret", ENC_SPECIAL, 0x0F07, 0, false, false, false, 0},  // System return (x64)
 
     // End marker
     {"", ENC_NONE, 0, 0, false, false, false, 0}};
@@ -406,42 +414,42 @@ uint8_t register_to_modrm(register_t reg)
     case REG_R8B:
     case REG_R8W:
     case REG_R8D:
-        return 0;  // R8 = ModR/M 0 + REX.R/B bit
+        return 0; // R8 = ModR/M 0 + REX.R/B bit
     case REG_R9:
     case REG_R9B:
     case REG_R9W:
     case REG_R9D:
-        return 1;  // R9 = ModR/M 1 + REX.R/B bit
+        return 1; // R9 = ModR/M 1 + REX.R/B bit
     case REG_R10:
     case REG_R10B:
     case REG_R10W:
     case REG_R10D:
-        return 2;  // R10 = ModR/M 2 + REX.R/B bit
+        return 2; // R10 = ModR/M 2 + REX.R/B bit
     case REG_R11:
     case REG_R11B:
     case REG_R11W:
     case REG_R11D:
-        return 3;  // R11 = ModR/M 3 + REX.R/B bit
+        return 3; // R11 = ModR/M 3 + REX.R/B bit
     case REG_R12:
     case REG_R12B:
     case REG_R12W:
     case REG_R12D:
-        return 4;  // R12 = ModR/M 4 + REX.R/B bit
+        return 4; // R12 = ModR/M 4 + REX.R/B bit
     case REG_R13:
     case REG_R13B:
     case REG_R13W:
     case REG_R13D:
-        return 5;  // R13 = ModR/M 5 + REX.R/B bit
+        return 5; // R13 = ModR/M 5 + REX.R/B bit
     case REG_R14:
     case REG_R14B:
     case REG_R14W:
     case REG_R14D:
-        return 6;  // R14 = ModR/M 6 + REX.R/B bit
+        return 6; // R14 = ModR/M 6 + REX.R/B bit
     case REG_R15:
     case REG_R15B:
     case REG_R15W:
     case REG_R15D:
-        return 7;  // R15 = ModR/M 7 + REX.R/B bit// Segment registers
+        return 7; // R15 = ModR/M 7 + REX.R/B bit// Segment registers
     case REG_ES:
         return 0;
     case REG_CS:
@@ -565,7 +573,8 @@ int get_register_size(register_t reg)
     case REG_CR3:
     case REG_CR4:
     case REG_CR5:
-    case REG_CR6:    case REG_CR7:
+    case REG_CR6:
+    case REG_CR7:
         return 32;
     default:
         return 0;
@@ -577,14 +586,38 @@ bool is_extended_register(register_t reg)
 {
     switch (reg)
     {
-    case REG_R8: case REG_R9: case REG_R10: case REG_R11:
-    case REG_R12: case REG_R13: case REG_R14: case REG_R15:
-    case REG_R8B: case REG_R9B: case REG_R10B: case REG_R11B:
-    case REG_R12B: case REG_R13B: case REG_R14B: case REG_R15B:
-    case REG_R8W: case REG_R9W: case REG_R10W: case REG_R11W:
-    case REG_R12W: case REG_R13W: case REG_R14W: case REG_R15W:
-    case REG_R8D: case REG_R9D: case REG_R10D: case REG_R11D:
-    case REG_R12D: case REG_R13D: case REG_R14D: case REG_R15D:
+    case REG_R8:
+    case REG_R9:
+    case REG_R10:
+    case REG_R11:
+    case REG_R12:
+    case REG_R13:
+    case REG_R14:
+    case REG_R15:
+    case REG_R8B:
+    case REG_R9B:
+    case REG_R10B:
+    case REG_R11B:
+    case REG_R12B:
+    case REG_R13B:
+    case REG_R14B:
+    case REG_R15B:
+    case REG_R8W:
+    case REG_R9W:
+    case REG_R10W:
+    case REG_R11W:
+    case REG_R12W:
+    case REG_R13W:
+    case REG_R14W:
+    case REG_R15W:
+    case REG_R8D:
+    case REG_R9D:
+    case REG_R10D:
+    case REG_R11D:
+    case REG_R12D:
+    case REG_R13D:
+    case REG_R14D:
+    case REG_R15D:
         return true;
     default:
         return false;
@@ -595,10 +628,22 @@ bool is_64bit_register(register_t reg)
 {
     switch (reg)
     {
-    case REG_RAX: case REG_RBX: case REG_RCX: case REG_RDX:
-    case REG_RSI: case REG_RDI: case REG_RBP: case REG_RSP:
-    case REG_R8: case REG_R9: case REG_R10: case REG_R11:
-    case REG_R12: case REG_R13: case REG_R14: case REG_R15:
+    case REG_RAX:
+    case REG_RBX:
+    case REG_RCX:
+    case REG_RDX:
+    case REG_RSI:
+    case REG_RDI:
+    case REG_RBP:
+    case REG_RSP:
+    case REG_R8:
+    case REG_R9:
+    case REG_R10:
+    case REG_R11:
+    case REG_R12:
+    case REG_R13:
+    case REG_R14:
+    case REG_R15:
         return true;
     default:
         return false;
@@ -609,7 +654,7 @@ bool needs_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mod
 {
     if (mode != MODE_64BIT)
         return false;
-    
+
     return is_64bit_register(reg1) || is_extended_register(reg1) ||
            is_64bit_register(reg2) || is_extended_register(reg2) ||
            is_64bit_register(reg3) || is_extended_register(reg3) ||
@@ -620,21 +665,21 @@ bool needs_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mod
 
 rex_prefix_t calculate_rex_prefix(register_t reg1, register_t reg2, register_t reg3, asm_mode_t mode)
 {
-    rex_prefix_t rex = { false, false, false, false, false };
-    
+    rex_prefix_t rex = {false, false, false, false, false};
+
     if (mode != MODE_64BIT)
         return rex;
-    
+
     rex.present = needs_rex_prefix(reg1, reg2, reg3, mode);
-    
+
     if (!rex.present)
         return rex;
-    
+
     rex.w = is_64bit_register(reg1) || is_64bit_register(reg2) || is_64bit_register(reg3);
     rex.r = is_extended_register(reg1);
     rex.x = is_extended_register(reg3);
     rex.b = is_extended_register(reg2);
-    
+
     return rex;
 }
 
@@ -642,14 +687,18 @@ uint8_t encode_rex_prefix(const rex_prefix_t *rex)
 {
     if (!rex->present)
         return 0;
-    
+
     uint8_t prefix = REX_PREFIX_BASE;
-    
-    if (rex->w) prefix |= 0x08;
-    if (rex->r) prefix |= 0x04;
-    if (rex->x) prefix |= 0x02;
-    if (rex->b) prefix |= 0x01;
-    
+
+    if (rex->w)
+        prefix |= 0x08;
+    if (rex->r)
+        prefix |= 0x04;
+    if (rex->x)
+        prefix |= 0x02;
+    if (rex->b)
+        prefix |= 0x01;
+
     return prefix;
 }
 
@@ -696,7 +745,7 @@ static bool encode_push_imm(const instruction_t *instr, uint8_t *buffer, size_t 
         *size = 2;
     }
     else
-    {        // Push immediate - size depends on mode
+    { // Push immediate - size depends on mode
         buffer[0] = 0x68;
         if (asm_ctx->mode == MODE_32BIT)
         {
@@ -822,6 +871,65 @@ static bool encode_pop_reg(const instruction_t *instr, uint8_t *buffer, size_t *
     *size = 1;
     return true;
 }
+
+static bool encode_xchg_reg_reg(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 2 ||
+        instr->operands[0].type != OPERAND_REGISTER ||
+        instr->operands[1].type != OPERAND_REGISTER)
+    {
+        return false;
+    }
+
+    register_t reg1 = instr->operands[0].value.reg;
+    register_t reg2 = instr->operands[1].value.reg;
+
+    uint8_t reg1_code = register_to_modrm(reg1);
+    uint8_t reg2_code = register_to_modrm(reg2);
+
+    buffer[0] = 0x87; // XCHG r/m16/32, r16/32
+    buffer[1] = make_modrm(3, reg1_code, reg2_code); // mod=11 (register), reg=reg1, r/m=reg2
+    *size = 2;
+    return true;
+}
+
+static bool encode_xchg_reg_mem(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 2 ||
+        instr->operands[0].type != OPERAND_REGISTER ||
+        instr->operands[1].type != OPERAND_MEMORY)
+    {
+        return false;
+    }
+
+    register_t reg = instr->operands[0].value.reg;
+    uint8_t reg_code = register_to_modrm(reg);
+
+    buffer[0] = 0x87; // XCHG r/m16/32, r16/32
+    buffer[1] = make_modrm(0, reg_code, 0); // mod=00 (memory), reg=reg, r/m=0
+    *size = 2;
+    return true;
+}
+
+static bool encode_xchg_mem_reg(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 2 ||
+        instr->operands[0].type != OPERAND_MEMORY ||
+        instr->operands[1].type != OPERAND_REGISTER)
+    {
+        return false;
+    }
+
+    register_t reg = instr->operands[1].value.reg;
+    uint8_t reg_code = register_to_modrm(reg);
+
+    buffer[0] = 0x87; // XCHG r/m16/32, r16/32
+    buffer[1] = make_modrm(0, reg_code, 0); // mod=00 (memory), reg=reg, r/m=0
+    *size = 2;
+    return true;
+}
+
+
 
 static bool is_segment_register(register_t reg)
 {
@@ -1682,23 +1790,32 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
 
                     // Determine relocation type based on instruction and mode
                     int relocation_type;
-                    if (asm_ctx->mode == MODE_64BIT) {
+                    if (asm_ctx->mode == MODE_64BIT)
+                    {
                         // For 64-bit mode, use PLT32 for call instructions to external symbols
-                        if (strcasecmp(instr->mnemonic, "call") == 0) {
+                        if (strcasecmp(instr->mnemonic, "call") == 0)
+                        {
                             relocation_type = R_X86_64_PLT32; // Use PLT for external function calls
-                        } else {
+                        }
+                        else
+                        {
                             relocation_type = R_X86_64_PC32; // PC-relative for jumps
                         }
-                    } else {
+                    }
+                    else
+                    {
                         relocation_type = R_386_PC32; // PC-relative for x86
                     }
 
                     if (asm_ctx->verbose)
                     {
                         const char *reloc_type_str = "unknown";
-                        if (asm_ctx->mode == MODE_64BIT) {
+                        if (asm_ctx->mode == MODE_64BIT)
+                        {
                             reloc_type_str = (relocation_type == R_X86_64_PLT32) ? "R_X86_64_PLT32" : "R_X86_64_PC32";
-                        } else {
+                        }
+                        else
+                        {
                             reloc_type_str = "R_386_PC32";
                         }
                         printf("DEBUG: Adding relocation for external symbol '%s' at offset 0x%X in section %d, type %s\n",
@@ -1708,7 +1825,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                     // Add relocation entry pointing to the displacement field (after opcode)
                     int64_t addend = (relocation_type == R_X86_64_PLT32) ? -4 : 0;
                     relocation_add(asm_ctx, offset_in_section + 1, symbol->name, relocation_type, section_type, addend);
-                    
+
                     // For external symbols, emit zero displacement (addend is in relocation record)
                     target_addr = current_addr + ((asm_ctx->mode == MODE_32BIT || asm_ctx->mode == MODE_64BIT) ? 5 : 3);
                     target_available = true;
@@ -1743,7 +1860,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                     instruction_size = 3; // 16-bit mode: opcode + 16-bit displacement
                 }
 
-                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size);                // Handle the case where target equals current address (call to itself)
+                int32_t displacement = (int32_t)(target_addr - current_addr - instruction_size); // Handle the case where target equals current address (call to itself)
                 if (target_addr == current_addr)
                 {
                     displacement = -(int32_t)instruction_size; // Call back to start of current instruction
@@ -1783,7 +1900,7 @@ static bool encode_jmp_rel(const instruction_t *instr, uint8_t *buffer, size_t *
                 bool needs_long_jump = (short_displacement < -128 || short_displacement > 127);
 
                 uint32_t optimal_size = needs_long_jump ? long_size : short_size;
-                int32_t displacement = (int32_t)(target_addr - current_addr - optimal_size);                // Handle the case where target equals current address (jump to itself)
+                int32_t displacement = (int32_t)(target_addr - current_addr - optimal_size); // Handle the case where target equals current address (jump to itself)
                 if (target_addr == current_addr)
                 {
                     displacement = -(int32_t)optimal_size; // Jump back to start of current instruction
@@ -2054,7 +2171,7 @@ static bool encode_inc_dec(const instruction_t *instr, uint8_t *buffer, size_t *
         {
             // For all other cases, use ModR/M form
             uint8_t modrm_reg = strcasecmp(instr->mnemonic, "inc") == 0 ? 0 : 1; // INC=0, DEC=1
-            
+
             if (reg_size == 8)
             {
                 buffer[0] = 0xFE; // INC/DEC r/m8
@@ -2063,7 +2180,7 @@ static bool encode_inc_dec(const instruction_t *instr, uint8_t *buffer, size_t *
             {
                 buffer[0] = 0xFF; // INC/DEC r/m16/32/64
             }
-            
+
             buffer[1] = make_modrm(3, modrm_reg, reg_code);
             *size = 2;
         }
@@ -2438,6 +2555,168 @@ static bool encode_aam_aad(const instruction_t *instr, uint8_t *buffer, size_t *
     return true;
 }
 
+static bool encode_syscall(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 0)
+    {
+        return false; // SYSCALL has no operands
+    }
+
+    if (strcasecmp(instr->mnemonic, "syscall") == 0)
+    {
+        buffer[0] = 0x0F; // Two-byte opcode prefix
+        buffer[1] = 0x05; // SYSCALL opcode
+        *size = 2;
+        return true;
+    }
+    return false;
+}
+
+static bool encode_sysret(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 0)
+    {
+        return false; // SYSRET has no operands
+    }
+
+    if (strcasecmp(instr->mnemonic, "sysret") == 0)
+    {
+        buffer[0] = 0x0F; // Two-byte opcode prefix
+        buffer[1] = 0x07; // SYSRET opcode
+        *size = 2;
+        return true;
+    }
+    return false;
+}
+
+static bool encode_sysenter(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 0)
+    {
+        return false; // SYSENTER has no operands
+    }
+
+    if (strcasecmp(instr->mnemonic, "sysenter") == 0)
+    {
+        buffer[0] = 0x0F; // Two-byte opcode prefix
+        buffer[1] = 0x34; // SYSENTER opcode
+        *size = 2;
+        return true;
+    }
+    return false;
+}
+
+static bool encode_sysexit(const instruction_t *instr, uint8_t *buffer, size_t *size)
+{
+    if (instr->operand_count != 0)
+    {
+        return false; // SYSEXIT has no operands
+    }
+
+    if (strcasecmp(instr->mnemonic, "sysexit") == 0)
+    {
+        buffer[0] = 0x0F; // Two-byte opcode prefix
+        buffer[1] = 0x35; // SYSEXIT opcode
+        *size = 2;
+        return true;
+    }
+    return false;
+}
+
+static bool encode_memory_addressing(const instruction_t *instr, uint8_t *buffer, size_t *size, assembler_t *asm_ctx)
+{
+    if (instr->operand_count != 1 || instr->operands[0].type != OPERAND_MEMORY)
+    {
+        return false;
+    }
+
+    const instruction_def_t *def = find_instruction(instr->mnemonic);
+    if (!def)
+        return false;
+
+    // For memory addressing, we need to handle different modes
+    register_t base_reg = instr->operands[0].value.memory.base;
+    register_t index_reg = instr->operands[0].value.memory.index;
+    int32_t displacement = instr->operands[0].value.memory.displacement;
+
+    // Determine ModR/M byte
+    uint8_t modrm_byte = 0;
+    if (base_reg == REG_NONE && index_reg == REG_NONE)
+    {
+        // Direct memory addressing [disp16]
+        modrm_byte = make_modrm(0, def->modrm_reg, 6); // mod=00, r/m=110
+        buffer[0] = def->opcode;                       // Opcode for memory operation
+        buffer[1] = (uint8_t)(displacement & 0xFF);   // Low byte of displacement
+        buffer[2] = (uint8_t)((displacement >> 8) & 0xFF); // High byte of displacement
+        *size = 3;
+    }
+    else if (base_reg != REG_NONE && index_reg == REG_NONE)
+    {
+        // Base addressing [base+disp16]
+        uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode);
+        if (displacement == 0 && base_reg != REG_BP)
+        {
+            modrm_byte = make_modrm(0, def->modrm_reg, base_code); // mod=00
+            buffer[0] = def->opcode;                                // Opcode for memory operation
+            buffer[1] = modrm_byte;                                // ModR/M byte
+            *size = 2;
+        }
+        else if (displacement >= -128 && displacement <= 127)
+        {
+            modrm_byte = make_modrm(1, def->modrm_reg, base_code); // mod=01
+            buffer[0] = def->opcode;                                // Opcode for memory operation
+            buffer[1] = modrm_byte;                                // ModR/M byte
+            buffer[2] = (uint8_t)displacement;                     // 8-bit
+            *size = 3;
+        }
+        else
+        {
+            modrm_byte = make_modrm(2, def->modrm_reg, base_code); // mod=10
+            buffer[0] = def->opcode;                                // Opcode for memory operation
+            buffer[1] = modrm_byte;                                // ModR/M byte
+            buffer[2] = (uint8_t)(displacement & 0xFF);            // Low byte of displacement
+            buffer[3] = (uint8_t)((displacement >> 8) & 0xFF);     // High byte of displacement
+            *size = 4;
+        }
+    }
+    else if (base_reg != REG_NONE && index_reg != REG_NONE)
+    {
+        // Indexed addressing [base+index*scale+disp32]
+        uint8_t base_code = register_to_rm(base_reg, asm_ctx->mode);
+        uint8_t index_code = register_to_rm(index_reg, asm_ctx->mode);
+        uint8_t scale = instr->operands[0].value.memory.scale;
+
+        modrm_byte = make_modrm(2, def->modrm_reg, base_code); // mod=10
+        buffer[0] = def->opcode;                                // Opcode for memory operation
+        buffer[1] = modrm_byte;                                // ModR/M byte
+        buffer[2] = (uint8_t)(displacement & 0xFF);            // Low byte of displacement
+        buffer[3] = (uint8_t)((displacement >> 8) & 0xFF);     // High byte of displacement
+        buffer[4] = scale;                                      // Scale
+        *size = 5;
+    }
+    else
+    {
+        // Unsupported addressing mode
+        return false;
+    }
+    // Store ModR/M byte in the buffer
+    buffer[0] = def->opcode; // Opcode for memory operation
+    buffer[1] = modrm_byte;  // ModR/M byte
+    if (def->opcode == 0x0F) // Two-byte opcode prefix
+    {
+        // If the instruction uses a two-byte opcode, we need to handle that
+        buffer[0] = 0x0F; // Two-byte prefix
+        buffer[1] = def->opcode; // Second byte of the opcode
+        *size += 1; // Adjust size for two-byte opcode
+    }
+    else
+    {
+        *size = 2; // Size for single-byte opcode + ModR/M byte
+    }
+    return true;
+}
+
+
 static bool encode_rep_string(const instruction_t *instr, uint8_t *buffer, size_t *size)
 {
     const instruction_def_t *def = find_instruction(instr->mnemonic);
@@ -2654,7 +2933,8 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                                prefix, instr->operands[i].value.memory.segment);
                     }
                     break; // Only one segment override per instruction
-                }            }
+                }
+            }
         }
     }
 
@@ -2688,10 +2968,10 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             }
         }
     }
-    
+
     if (needs_operand_size_override)
     {
-        buffer[prefix_size] = 0x66;  // Operand size override prefix
+        buffer[prefix_size] = 0x66; // Operand size override prefix
         prefix_size++;
         if (asm_ctx->verbose)
         {
@@ -2704,22 +2984,22 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
     if (asm_ctx->mode == MODE_64BIT)
     {
         register_t reg1 = REG_NONE, reg2 = REG_NONE, reg3 = REG_NONE;
-        
+
         // Extract registers from operands for REX calculation
         // For MOV reg, reg: reg1 = source (REX.R), reg2 = destination (REX.B)
         if (instr->operand_count >= 2 && instr->operands[1].type == OPERAND_REGISTER)
-            reg1 = instr->operands[1].value.reg;  // source register (REX.R)
+            reg1 = instr->operands[1].value.reg; // source register (REX.R)
         if (instr->operand_count >= 1 && instr->operands[0].type == OPERAND_REGISTER)
-            reg2 = instr->operands[0].value.reg;  // destination register (REX.B)
+            reg2 = instr->operands[0].value.reg; // destination register (REX.B)
         if (instr->operand_count >= 1 && instr->operands[0].type == OPERAND_MEMORY)
         {
             reg2 = instr->operands[0].value.memory.base;
             reg3 = instr->operands[0].value.memory.index;
         }
-        
+
         // Check for 64-bit string operations that need REX.W
         bool needs_rex_w = false;
-        if (strcasecmp(instr->mnemonic, "movsq") == 0 || 
+        if (strcasecmp(instr->mnemonic, "movsq") == 0 ||
             strcasecmp(instr->mnemonic, "cmpsq") == 0 ||
             strcasecmp(instr->mnemonic, "scasq") == 0 ||
             strcasecmp(instr->mnemonic, "lodsq") == 0 ||
@@ -2727,14 +3007,14 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
         {
             needs_rex_w = true;
         }
-        
+
         rex_prefix_t rex = calculate_rex_prefix(reg1, reg2, reg3, asm_ctx->mode);
-        if (needs_rex_w) 
+        if (needs_rex_w)
         {
             rex.w = true;
-            rex.present = true;  // Force REX prefix for 64-bit operations
+            rex.present = true; // Force REX prefix for 64-bit operations
         }
-        
+
         if (rex.present)
         {
             buffer[rex_offset] = encode_rex_prefix(&rex);
@@ -2745,10 +3025,10 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             }
         }
     }
-    
+
     // Use a temporary buffer for the main instruction, then copy to final buffer with prefix
     uint8_t temp_buffer[16];
-    size_t temp_size = 0;// Handle far pointer calls and jumps: jmp seg:off, call seg:off
+    size_t temp_size = 0; // Handle far pointer calls and jumps: jmp seg:off, call seg:off
     if (instr->operand_count == 1 && instr->operands[0].type == OPERAND_FARPTR)
     {
         uint16_t offset = instr->operands[0].value.far_ptr.offset;
@@ -2885,6 +3165,90 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
             }
         }
         return false; // Unsupported MOV combination
+    } // Handle LEA REG, [MEMORY] instruction
+    if (strcasecmp(instr->mnemonic, "lea") == 0 && instr->operand_count == 2 &&
+        instr->operands[0].type == OPERAND_REGISTER && instr->operands[1].type == OPERAND_MEMORY)
+    {
+        // LEA reg, [mem] - load effective address
+        uint8_t reg_code = register_to_modrm(instr->operands[0].value.reg);
+        if (instr->operands[1].value.memory.has_label)
+        {
+            // Direct memory addressing with label
+            symbol_t *sym = symbol_lookup(asm_ctx, instr->operands[1].value.memory.label);
+            temp_buffer[0] = 0x8D; // LEA opcode
+            
+            if (asm_ctx->mode == MODE_64BIT)
+            {
+                // In 64-bit mode, use RIP-relative addressing
+                temp_buffer[1] = make_modrm(0, reg_code, 5); // mod=00, r/m=101 for RIP-relative
+                
+                // Calculate RIP-relative displacement
+                uint32_t addr = sym && sym->defined ? sym->address : 0;
+                // LEA instruction with REX prefix is 7 bytes: REX(1) + opcode(1) + ModR/M(1) + disp32(4)
+                uint32_t next_instr_addr = asm_ctx->current_address + 7;
+                int32_t displacement = (int32_t)(addr - next_instr_addr);
+                
+                temp_buffer[2] = displacement & 0xFF;
+                temp_buffer[3] = (displacement >> 8) & 0xFF;
+                temp_buffer[4] = (displacement >> 16) & 0xFF;
+                temp_buffer[5] = (displacement >> 24) & 0xFF;
+                temp_size = 6;
+            }
+            else
+            {
+                // In 16-bit/32-bit mode, use direct addressing
+                temp_buffer[1] = make_modrm(0, reg_code, 6); // mod=00, r/m=110 for direct mem
+                uint16_t addr = sym && sym->defined ? sym->address : 0;
+                temp_buffer[2] = addr & 0xFF;
+                temp_buffer[3] = addr >> 8;
+                temp_size = 4;
+            }
+        }
+        else
+        {
+            // Memory addressing without label
+            if (!encode_memory_addressing(instr, temp_buffer + 1, &temp_size, asm_ctx))
+                return false; // Invalid memory addressing
+
+            temp_buffer[0] = 0x8D; // LEA opcode
+            temp_buffer[1] = make_modrm(2, reg_code, 0); // mod=10 for memory with displacement
+        }
+
+        // Copy to final buffer with prefix
+        memcpy(buffer + prefix_size, temp_buffer, temp_size);
+        *size = prefix_size + temp_size;
+        return true;
+    } // Handle XCHG instruction with different operand types
+    if (strcasecmp(instr->mnemonic, "xchg") == 0)
+    {
+        if (instr->operand_count == 2)
+        {
+            bool result = false;
+            if (instr->operands[0].type == OPERAND_REGISTER &&
+                instr->operands[1].type == OPERAND_REGISTER)
+            {
+                result = encode_xchg_reg_reg(instr, temp_buffer, &temp_size);
+            }
+            else if (instr->operands[0].type == OPERAND_REGISTER &&
+                     instr->operands[1].type == OPERAND_MEMORY)
+            {
+                result = encode_xchg_reg_mem(instr, temp_buffer, &temp_size);
+            }
+            else if (instr->operands[0].type == OPERAND_MEMORY &&
+                     instr->operands[1].type == OPERAND_REGISTER)
+            {
+                result = encode_xchg_mem_reg(instr, temp_buffer, &temp_size);
+            }
+
+            if (result)
+            {
+                // Copy to final buffer with prefix
+                memcpy(buffer + prefix_size, temp_buffer, temp_size);
+                *size = prefix_size + temp_size;
+                return true;
+            }
+        }
+        return false; // Unsupported XCHG combination
     } // Handle PUSH instruction with different operand types
     if (strcasecmp(instr->mnemonic, "push") == 0)
     {
@@ -3113,6 +3477,40 @@ bool generate_opcode(const instruction_t *instr, uint8_t *buffer, size_t *size, 
                  strcasecmp(instr->mnemonic, "aad") == 0)
         {
             result = encode_aam_aad(instr, temp_buffer, &temp_size);
+        }
+        else if (strcasecmp(instr->mnemonic, "syscall") == 0)
+        {
+            result = encode_syscall(instr, temp_buffer, &temp_size);
+        }
+        else if (strcasecmp(instr->mnemonic, "sysret") == 0)
+        {
+            result = encode_sysret(instr, temp_buffer, &temp_size);
+        }
+        else if (strcasecmp(instr->mnemonic, "sysenter") == 0)
+        {
+            static bool warned = false;
+            if (asm_ctx->mode == MODE_64BIT)
+            {
+                if (!warned)
+                {
+                    printf("\033[1;33m[WARN]\033[0m SYSENTER is not supported in 64-bit mode and may cause \033[1;31m#UD (Undefined Instruction Exception)\033[0m\n");
+                    warned = true;
+                }
+            }
+            result = encode_sysenter(instr, temp_buffer, &temp_size);
+        }
+        else if (strcasecmp(instr->mnemonic, "sysexit") == 0)
+        {
+            static bool warned = false;
+            if (asm_ctx->mode == MODE_64BIT)
+            {
+                if (!warned)
+                {
+                    printf("\033[1;33m[WARN]\033[0m SYSEXIT is not supported in 64-bit mode and may cause \033[1;31m#UD (Undefined Instruction Exception)\033[0m\n");
+                    warned = true;
+                }
+            }
+            result = encode_sysexit(instr, temp_buffer, &temp_size);
         }
         break;
 

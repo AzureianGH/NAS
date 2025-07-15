@@ -547,7 +547,15 @@ static token_t lexer_read_string(lexer_t *lexer)
             // I/O operations
             "in", "out",
             // Convert operations
-            "cbw", "cwd"};
+            "cbw", "cwd",
+
+            // Special x86
+            "sysenter", "sysexit",
+
+            // Special x64
+            "syscall", "sysret"
+        
+            };
         token.type = TOKEN_LABEL; // Default to label
         for (size_t i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
         {

@@ -1,9 +1,27 @@
 #width 64
+#extend printf
 #global main
-#extend exit
+
+#section .text
+main:                      
+    push    rbp    
+    mov     rbp, rsp       
+    
+    sub     rsp, 8
+    
+    lea     rdi, [fmt]
+    lea     rsi, [msg]
+    mov     rax, 0
+    call    printf
+
+    add     rsp, 8
+    pop     rbp
+
+    mov     rax, 0
+    ret
 
 
-main:
-    xor rdi, rdi
-    mov edi, 123
-    call exit
+msg:
+    #db "Hello, world!", 0
+fmt:
+    #db "%s", 0x0A, 0 
