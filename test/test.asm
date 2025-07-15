@@ -1,27 +1,19 @@
 #width 64
 #extend printf
-#global main
+#global nas_print
 
 #section .text
-main:                      
-    push    rbp    
-    mov     rbp, rsp       
-    
-    sub     rsp, 8
-    
-    lea     rdi, [fmt]
-    lea     rsi, [msg]
-    mov     rax, 0
-    call    printf
+nas_print: ; C CODE: void nas_print(char* msg)        
+    push rbp    
+    mov rbp, rsp       
 
-    add     rsp, 8
-    pop     rbp
+    mov rsi, rdi ; msg
+    lea rdi, [fmt]
 
-    mov     rax, 0
+    mov rax, 0
+    call printf
+    pop rbp
     ret
 
-
-msg:
-    #db "Hello, world!", 0
 fmt:
     #db "%s", 0x0A, 0 

@@ -5,9 +5,9 @@ void print_version()
 {
 #ifdef _WIN32
     #ifdef __x86_64__
-    printf("nas [nas-win-x64] ntos(7.2025.3.0) - 3.00\n");
+    printf("nas [nas-win-x64] ntos(7.2025.3.8) - 3.80\n");
     #else
-    printf("nas [nas-win-x86] ntos(7.2025.3.0) - 3.00\n");
+    printf("nas [nas-win-x86] ntos(7.2025.3.8) - 3.80\n");
     #endif
     printf("Copyright (C) 2025 Nathan's Compiler Collection\n");
     printf("This is free software; see the source for copying conditions.  There is NO\n");
@@ -15,9 +15,9 @@ void print_version()
     
 #else
     #ifdef __x86_64__
-    printf("nas [nas-linux-x64] linux-based(7.2025.3.0) - 3.00\n");
+    printf("nas [nas-linux-x64] linux-based(7.2025.3.8) - 3.80\n");
     #else
-    printf("nas [nas-linux-x86] linux-based(7.2025.3.0) - 3.00\n");
+    printf("nas [nas-linux-x86] linux-based(7.2025.3.8) - 3.80\n");
     #endif
     printf("Copyright (C) 2025 Nathan's Compiler Collection\n");
     printf("This is free software; see the source for copying conditions.  There is NO\n");
